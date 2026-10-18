@@ -1,0 +1,33 @@
+# Runtime state and secrets — never commit these.
+config/*
+!config/overrides.example.yml
+*.db
+*.sqlite
+*.sqlite3
+.env
+settings.json
+
+# Vendored *arr OpenAPI specs, kept locally for reference only.
+v5.json
+radarrapiv3.json
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

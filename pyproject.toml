@@ -1,0 +1,26 @@
+[project]
+name = "ohnaarr"
+version = "1.2.0"
+description = "Unattended repair of stuck Sonarr/Radarr imports (German umlauts, naming, ID-matched releases), with a web interface"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27,<1.0",
+    "rapidfuzz>=3.9,<4.0",
+    "PyYAML>=6.0,<7.0",
+]
+
+[project.scripts]
+ohnaarr = "ohnaarr.main:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+include = ["ohnaarr*"]
+
+[tool.setuptools.package-data]
+ohnaarr = ["static/*.html", "static/*.png"]

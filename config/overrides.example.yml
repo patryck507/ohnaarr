@@ -1,0 +1,14 @@
+# Optional. Mount at /config/overrides.yml (re-read on every run, no restart needed).
+
+# Force a release title onto a specific series. Key is matched after folding
+# (lowercase, umlauts transliterated, punctuation dropped), value is a Sonarr
+# series id or an exact series title.
+series_aliases:
+  # "die pfefferkoerner spezial": "Die Pfefferkörner"
+  # "tatort muenster": 143
+
+# Literal substitutions applied before parsing, for uploader quirks that no
+# amount of folding fixes.
+title_replacements:
+  # - ["Staffel", "Season"]
+  # - ["Folge", "Episode"]

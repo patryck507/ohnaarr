@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+config/
+.env
+.git/
+.github/
+v5.json
+radarrapiv3.json
+README.md
+docker-compose.yml

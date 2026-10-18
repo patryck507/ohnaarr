@@ -1,0 +1,50 @@
+services:
+  ohnaarr:
+    build: .
+    image: ohnaarr:1.2.0
+    container_name: ohnaarr
+    restart: unless-stopped
+    environment:
+      # Everything here can also be set in the web interface, which stores it in
+      # /config/settings.json. A value saved there wins over the environment.
+      SONARR_URL: "${SONARR_URL:-http://sonarr:8989}"
+      SONARR_API_KEY: "${SONARR_API_KEY:-}"
+
+      # Movies (optional)
+      RADARR_ENABLED: "${RADARR_ENABLED:-false}"
+      RADARR_URL: "${RADARR_URL:-http://radarr:7878}"
+      RADARR_API_KEY: "${RADARR_API_KEY:-}"
+
+      # Starts in observe-only mode; flip it in the UI once the decisions look right.
+      DRY_RUN: "${DRY_RUN:-true}"
+
+      INTERVAL_SECONDS: "300"
+      IMPORT_MODE: "auto"          # auto | move | copy
+      LOG_LEVEL: "INFO"
+
+      # Web interface. Set both to put it behind a sign-in form.
+      HTTP_PORT: "8787"
+      WEB_USERNAME: "${WEB_USERNAME:-}"
+      WEB_PASSWORD: "${WEB_PASSWORD:-}"
+
+      # Discord webhook, or any other URL for plain JSON
+      WEBHOOK_URL: "${WEBHOOK_URL:-}"
+
+      TZ: "${TZ:-UTC}"
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./config:/config
+      # No media mounts needed: every path comes from the *arr APIs and the file
+      # moves are performed by Sonarr/Radarr, not by this container.
+
+    # ohnaarr only needs to reach Sonarr/Radarr over HTTP. If they run in Docker
+    # on the same host, join their network instead of using host addresses:
+    #
+    # networks:
+    #   - arr
+    #
+    # networks:
+    #   arr:
+    #     external: true
+    #     name: <the network your *arrs are on>

@@ -1,0 +1,5 @@
+# Keep the repository on LF, whatever the checkout platform does locally.
+* text=auto eol=lf
+
+*.png binary
+*.db binary
