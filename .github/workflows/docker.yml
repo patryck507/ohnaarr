@@ -56,8 +56,8 @@ jobs:
           echo "tags=$repo:$version,$repo:latest" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-qemu-action@v3
-        if: steps.creds.outputs.ready == 'true'
+      # amd64 only, built on an amd64 runner - no QEMU layer needed. Add
+      # docker/setup-qemu-action here if arm64 is ever added to platforms.
       - uses: docker/setup-buildx-action@v3
         if: steps.creds.outputs.ready == 'true'
       - uses: docker/login-action@v3
