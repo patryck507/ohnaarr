@@ -10,6 +10,7 @@
 ![Tests](https://img.shields.io/badge/tests-222%20passing-brightgreen)
 [![Docker Hub](https://img.shields.io/docker/v/patryck507/ohnaarr?label=docker%20hub&sort=semver)](https://hub.docker.com/r/patryck507/ohnaarr)
 [![Image size](https://img.shields.io/docker/image-size/patryck507/ohnaarr/latest)](https://hub.docker.com/r/patryck507/ohnaarr)
+[![Publish image](https://github.com/patryck507/ohnaarr/actions/workflows/docker.yml/badge.svg)](https://github.com/patryck507/ohnaarr/actions/workflows/docker.yml)
 
 A Docker sidecar that watches the Sonarr/Radarr queue, finds the downloads the
 *arr refuses to import on its own, works out which episodes or which movie the
@@ -449,3 +450,15 @@ season-pack case above, and the Sonarr v4 quirks (`downloadId` is singular,
 
 Stack: Python 3.12, `httpx`, `rapidfuzz`, `PyYAML`. The web server is
 `http.server` from the standard library — no framework.
+
+### Releases
+
+The tests run on every push. Pushing a `v*` tag (or starting **Publish image**
+by hand) builds the image and pushes it to Docker Hub as that version plus
+`latest` — once the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository
+secrets exist. Without them the publish step skips instead of failing.
+
+```bash
+# cut a release
+git tag v1.2.1 && git push origin v1.2.1
+```
