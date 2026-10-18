@@ -8,6 +8,8 @@
 ![Sonarr](https://img.shields.io/badge/Sonarr-v4%20%7C%20v5-5bc0de)
 ![Radarr](https://img.shields.io/badge/Radarr-v3-ffc230)
 ![Tests](https://img.shields.io/badge/tests-222%20passing-brightgreen)
+[![Docker Hub](https://img.shields.io/docker/v/patryck507/ohnaarr?label=docker%20hub&sort=semver)](https://hub.docker.com/r/patryck507/ohnaarr)
+[![Image size](https://img.shields.io/docker/image-size/patryck507/ohnaarr/latest)](https://hub.docker.com/r/patryck507/ohnaarr)
 
 A Docker sidecar that watches the Sonarr/Radarr queue, finds the downloads the
 *arr refuses to import on its own, works out which episodes or which movie the
@@ -99,25 +101,30 @@ than guessing.
 
 ## Quick start
 
-No image is published yet, so build it from source:
-
 ```bash
-git clone https://github.com/patryck507/ohnaarr.git
-cd ohnaarr
-cp .env.example .env        # optional — the web interface can do all of this
-docker compose up -d --build
-```
-
-Or without compose:
-
-```bash
-docker build -t ohnaarr .
 docker run -d --name ohnaarr \
   -p 8787:8787 \
   -v /srv/ohnaarr/config:/config \
   -e TZ=Europe/Berlin \
   --restart unless-stopped \
-  ohnaarr
+  patryck507/ohnaarr:latest
+```
+
+Or with compose:
+
+```bash
+curl -O https://raw.githubusercontent.com/patryck507/ohnaarr/main/docker-compose.yml
+docker compose up -d
+```
+
+Images: [`patryck507/ohnaarr`](https://hub.docker.com/r/patryck507/ohnaarr) —
+`latest` and `1.2.0`, `linux/amd64`, about 50 MB compressed. To build it
+yourself instead:
+
+```bash
+git clone https://github.com/patryck507/ohnaarr.git
+cd ohnaarr
+docker compose up -d --build
 ```
 
 Then open **http://&lt;host&gt;:8787**:

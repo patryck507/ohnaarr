@@ -7,6 +7,13 @@ ENV PYTHONUNBUFFERED=1 \
     LC_ALL=C.UTF-8 \
     PYTHONIOENCODING=UTF-8
 
+LABEL org.opencontainers.image.title="ohnaarr"
+LABEL org.opencontainers.image.description="Fixes the Sonarr and Radarr imports that need a human: grab-history ID matching, German umlaut and episode-naming repair, with a web interface."
+LABEL org.opencontainers.image.source="https://github.com/patryck507/ohnaarr"
+LABEL org.opencontainers.image.documentation="https://github.com/patryck507/ohnaarr#readme"
+LABEL org.opencontainers.image.version="1.2.0"
+LABEL org.opencontainers.image.base.name="python:3.12-slim"
+
 WORKDIR /app
 
 COPY requirements.txt .

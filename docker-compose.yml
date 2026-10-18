@@ -1,7 +1,8 @@
 services:
   ohnaarr:
-    build: .
-    image: ohnaarr:1.2.0
+    image: patryck507/ohnaarr:latest
+    # Building from a clone instead? Uncomment this and run `up -d --build`.
+    # build: .
     container_name: ohnaarr
     restart: unless-stopped
     environment:
