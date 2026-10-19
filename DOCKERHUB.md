@@ -51,10 +51,18 @@ point the URLs at the host.
 | tag | contents |
 | --- | --- |
 | `latest` | the newest release |
-| `1.2.0` | pinned release |
+| `1.3.0` | pinned release |
 
 `linux/amd64`. Runs as uid 1000, has a `HEALTHCHECK`, and keeps its state in the
 `/config` volume.
+
+## More than a scanner
+
+- **Push**: Sonarr calls ohnaarr the moment an import gets stuck
+  (`On Manual Interaction Required`), so repairs happen in seconds.
+- **Teach it**: when nothing matches, pick the right series from your library in
+  the interface and the rule is written for you.
+- **English and German**, switchable in the interface.
 
 ## Configuration
 
@@ -73,6 +81,8 @@ Everything is editable in the web interface, which stores it in
 | `IMPORT_MODE` | `auto` | `auto` \| `move` \| `copy` |
 | `WEBHOOK_URL` | — | Discord webhook → embed; any other URL → plain JSON |
 | `WEB_USERNAME` / `WEB_PASSWORD` | — | put the interface behind a sign-in form |
+| `HOOK_ENABLED` / `HOOK_TOKEN` | — | accept a push from Sonarr/Radarr |
+| `UI_LANGUAGE` | `auto` | `auto` \| `en` \| `de` |
 | `HTTP_PORT` | `8787` | web interface; `0` disables it |
 
 The [full table](https://github.com/patryck507/ohnaarr#configuration) covers

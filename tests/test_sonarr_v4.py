@@ -87,7 +87,9 @@ def v4_candidates() -> list[dict]:
                 "seasonNumber": None,
                 "episodes": [],
                 "quality": {
-                    "quality": {"id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080},
+                    "quality": {
+                        "id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080,
+                    },
                     "revision": {"version": 1, "real": 0, "isRepack": False},
                 },
                 "languages": [{"id": 4, "name": "German"}, {"id": 1, "name": "English"}],

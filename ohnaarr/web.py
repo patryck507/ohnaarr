@@ -22,6 +22,11 @@ Routes
     GET  /api/session          whether sign-in is required, and who is signed in
     POST /api/login            exchange username and password for a session cookie
     POST /api/logout           end the session
+    POST /api/hook             Sonarr/Radarr push: run now instead of waiting
+    POST /api/fix              repair one queue item
+    POST /api/retry            forget every unplaced file so they are tried again
+    GET  /api/lookup           search the library (for teaching a name)
+    POST /api/teach            pin a release name to a series or movie
 
 Mutating requests must carry `X-Ohnaarr: 1`, which a cross-site form cannot
 set. When a UI username and password are set, the browser signs in through a
@@ -37,9 +42,10 @@ import http.cookies
 import json
 import logging
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .auth import COOKIE_NAME, Sessions, Throttle
@@ -74,9 +80,14 @@ class _Locked(Exception):
 _PUBLIC_ROUTES = frozenset(
     {
         "/", "/index.html", "/icon.png", "/healthz", "/health", "/metrics",
-        "/api/session", "/api/login",
+        "/api/session", "/api/login", "/api/hook",
     }
 )
+
+
+# An *arr webhook cannot set a custom header, so the push endpoint is guarded
+# by its own token instead of by X-Ohnaarr.
+_NO_CSRF_ROUTES = frozenset({"/api/hook"})
 
 
 def serve(port: int, service: Any) -> ThreadingHTTPServer:
@@ -106,7 +117,9 @@ def _make_handler(
         def log_message(self, fmt: str, *args: Any) -> None:  # noqa: A003
             log.debug("web %s", fmt % args)
 
-        def _send(self, code: int, body: bytes, content_type: str, extra: JSON | None = None) -> None:
+        def _send(
+            self, code: int, body: bytes, content_type: str, extra: JSON | None = None
+        ) -> None:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
@@ -195,12 +208,37 @@ def _make_handler(
             user, _, password = decoded.partition(":")
             return self._credentials_ok(user, password)
 
+        def _proxy_user(self) -> str:
+            """The user an authenticating reverse proxy vouches for, if any.
+
+            Only trusted when the request comes from a listed address; with no
+            list, any client that can reach this port could forge the header,
+            which the setting's own help text spells out.
+            """
+            cfg = service.cfg
+            header = (cfg.trusted_proxy_header or "").strip()
+            if not header:
+                return ""
+            user = (self.headers.get(header) or "").strip()
+            if not user:
+                return ""
+            allowed = [ip.strip() for ip in cfg.trusted_proxy_ips if ip.strip()]
+            if allowed and self._client() not in allowed:
+                log.warning(
+                    "ignoring %s from %s: not a trusted proxy address",
+                    header, self._client(),
+                )
+                return ""
+            return user
+
         def _check_auth(self) -> None:
             if not service.cfg.auth_required:
                 return
             if sessions.valid(self._cookie(COOKIE_NAME)):
                 return
             if self._basic_ok():
+                return
+            if self._proxy_user():
                 return
             raise _Unauthorized
 
@@ -250,7 +288,7 @@ def _make_handler(
             try:
                 if route not in _PUBLIC_ROUTES:
                     self._check_auth()
-                if mutating:
+                if mutating and route not in _NO_CSRF_ROUTES:
                     self._check_origin()
                 getattr(self, name)(parse_qs(url.query))
             except _Unauthorized:
@@ -389,16 +427,20 @@ def _make_handler(
 
         def h_session(self, _query: JSON) -> None:
             cfg = service.cfg
+            proxy_user = self._proxy_user()
             signed_in = (
                 not cfg.auth_required
                 or sessions.valid(self._cookie(COOKIE_NAME))
                 or self._basic_ok()
+                or bool(proxy_user)
             )
             self._json(
                 {
                     "authRequired": cfg.auth_required,
                     "signedIn": bool(signed_in),
-                    "user": cfg.web_username if cfg.auth_required else "",
+                    "user": proxy_user or (cfg.web_username if cfg.auth_required else ""),
+                    "viaProxy": bool(proxy_user),
+                    "language": cfg.ui_language,
                 }
             )
 
@@ -439,6 +481,66 @@ def _make_handler(
                 self._clear_session_cookie(),
             )
 
+        def h_hook(self, query: JSON) -> None:
+            """Sonarr/Radarr webhook: wake the loop instead of waiting for it.
+
+            Cross-site protection here is the token, not the X-Ohnaarr header,
+            because an *arr webhook cannot send custom headers.
+            """
+            cfg = service.cfg
+            if not cfg.hook_enabled:
+                self._json({"error": "push is switched off"}, 404)
+                return
+            if cfg.hook_token:
+                sent = (query.get("token") or [""])[0]
+                if not hmac.compare_digest(sent, cfg.hook_token):
+                    log.warning("push rejected from %s: wrong token", self._client())
+                    self._json({"error": "wrong token"}, 401)
+                    return
+
+            body = self._body() if self._raw_body else {}
+            event = str(body.get("eventType") or "")
+            if event.lower() == "test":
+                self._json({"ok": True, "event": event, "triggered": False})
+                return
+
+            # Anything the *arr bothers to tell us about is worth a look; the
+            # run itself decides whether something is actually stuck.
+            service.trigger()
+            log.info("push from %s (%s): running now", self._client(), event or "no event")
+            self._json({"ok": True, "event": event, "triggered": True}, 202)
+
+        def h_fix(self, _query: JSON) -> None:
+            body = self._body()
+            queue_id = body.get("id")
+            if queue_id is None:
+                raise _BadRequest("id is required")
+            kind = str(body.get("kind") or "series")
+            self._json(service.fix_one(int(queue_id), kind))
+
+        def h_retry(self, _query: JSON) -> None:
+            self._json(service.retry_all())
+
+        def h_lookup(self, query: JSON) -> None:
+            term = (query.get("term") or [""])[0]
+            kind = (query.get("kind") or ["series"])[0]
+            self._json(service.lookup(term, kind))
+
+        def h_teach(self, _query: JSON) -> None:
+            body = self._body()
+            name = str(body.get("name") or "")
+            target = body.get("targetId")
+            if target is None:
+                raise _BadRequest("targetId is required")
+            self._json(
+                service.teach(
+                    name,
+                    int(target),
+                    kind=str(body.get("kind") or "series"),
+                    path=str(body.get("path") or ""),
+                )
+            )
+
         def h_stats(self, query: JSON) -> None:
             days = int((query.get("days") or ["14"])[0])
             self._json(service.stats(days=max(1, min(days, 90))))
@@ -472,6 +574,7 @@ _GET_ROUTES: dict[str, str] = {
     "/api/history": "h_history",
     "/api/stats": "h_stats",
     "/api/session": "h_session",
+    "/api/lookup": "h_lookup",
 }
 
 _POST_ROUTES: dict[str, str] = {
@@ -484,6 +587,10 @@ _POST_ROUTES: dict[str, str] = {
     "/api/forget": "h_forget",
     "/api/notify/test": "h_test_webhook",
     "/api/login": "h_login",
+    "/api/hook": "h_hook",
+    "/api/fix": "h_fix",
+    "/api/retry": "h_retry",
+    "/api/teach": "h_teach",
     "/api/logout": "h_logout",
 }
 
@@ -504,13 +611,43 @@ def _version() -> str:
     return __version__
 
 
+# name -> (help text, type). Prometheus wants these before the sample.
+_METRIC_DOCS: dict[str, tuple[str, str]] = {
+    "ohnaarr_healthy": ("Sonarr answered the last probe", "gauge"),
+    "ohnaarr_radarr_healthy": ("Radarr answered the last probe", "gauge"),
+    "ohnaarr_configured": ("A Sonarr connection is configured", "gauge"),
+    "ohnaarr_dry_run": ("Decisions are made but nothing is written", "gauge"),
+    "ohnaarr_running": ("A pass is in progress", "gauge"),
+    "ohnaarr_runs_total": ("Passes since this process started", "counter"),
+    "ohnaarr_imported_total": ("Files imported since this process started", "counter"),
+    "ohnaarr_unresolved_total": ("Files handed back since this process started", "counter"),
+    "ohnaarr_errors_total": ("Errors since this process started", "counter"),
+    "ohnaarr_resolved_files": ("Files recorded as imported, all time", "gauge"),
+    "ohnaarr_pending_files": ("Files still unplaced", "gauge"),
+    "ohnaarr_last_run_checked": ("Downloads inspected in the last pass", "gauge"),
+    "ohnaarr_last_run_imported": ("Files imported in the last pass", "gauge"),
+    "ohnaarr_last_run_planned": ("Files a dry run would have imported", "gauge"),
+    "ohnaarr_last_run_unresolved": ("Files the last pass handed back", "gauge"),
+    "ohnaarr_last_run_rejected": ("Files the *arr refused in the last pass", "gauge"),
+    "ohnaarr_last_run_skipped": ("Files deliberately left alone in the last pass", "gauge"),
+    "ohnaarr_last_run_errors": ("Errors in the last pass", "gauge"),
+    "ohnaarr_last_run_duration_seconds": ("How long the last pass took", "gauge"),
+    "ohnaarr_last_run_timestamp_seconds": ("When the last pass finished", "gauge"),
+    "ohnaarr_next_run_timestamp_seconds": ("When the next pass is due", "gauge"),
+    "ohnaarr_uptime_seconds": ("Seconds since this process started", "gauge"),
+}
+
+
 def _metrics(status: JSON) -> str:
     last = status.get("last_run") or {}
     totals = status.get("totals") or {}
+    started = status.get("started_at") or 0
     rows: list[tuple[str, Any]] = [
         ("ohnaarr_healthy", int(bool(status.get("healthy")))),
+        ("ohnaarr_radarr_healthy", int(bool(status.get("radarr_healthy")))),
         ("ohnaarr_configured", int(bool(status.get("configured")))),
         ("ohnaarr_dry_run", int(bool(status.get("dry_run")))),
+        ("ohnaarr_running", int(bool(status.get("running")))),
         ("ohnaarr_runs_total", status.get("runs") or 0),
         ("ohnaarr_imported_total", status.get("imported_total") or 0),
         ("ohnaarr_unresolved_total", status.get("unresolved_total") or 0),
@@ -519,7 +656,23 @@ def _metrics(status: JSON) -> str:
         ("ohnaarr_pending_files", totals.get("pending_total") or 0),
         ("ohnaarr_last_run_checked", last.get("checked") or 0),
         ("ohnaarr_last_run_imported", last.get("imported") or 0),
+        ("ohnaarr_last_run_planned", last.get("planned") or 0),
         ("ohnaarr_last_run_unresolved", last.get("unresolved") or 0),
+        ("ohnaarr_last_run_rejected", last.get("rejected") or 0),
+        ("ohnaarr_last_run_skipped", last.get("skipped") or 0),
+        ("ohnaarr_last_run_errors", last.get("errors") or 0),
         ("ohnaarr_last_run_duration_seconds", last.get("duration_seconds") or 0),
+        ("ohnaarr_last_run_timestamp_seconds", status.get("last_run_at") or 0),
+        ("ohnaarr_next_run_timestamp_seconds", status.get("next_run_at") or 0),
+        ("ohnaarr_uptime_seconds", round(time.time() - started, 1) if started else 0),
     ]
-    return "\n".join(f"{name} {value}" for name, value in rows) + "\n"
+    lines: list[str] = [
+        f'ohnaarr_build_info{{version="{_version()}"}} 1',
+    ]
+    for name, value in rows:
+        doc, kind = _METRIC_DOCS.get(name, ("", "gauge"))
+        if doc:
+            lines.append(f"# HELP {name} {doc}")
+            lines.append(f"# TYPE {name} {kind}")
+        lines.append(f"{name} {value}")
+    return "\n".join(lines) + "\n"

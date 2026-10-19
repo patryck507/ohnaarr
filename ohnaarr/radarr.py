@@ -47,7 +47,7 @@ class RadarrClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "RadarrClient":
+    def __enter__(self) -> RadarrClient:
         return self
 
     def __exit__(self, *_exc: object) -> None:

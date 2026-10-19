@@ -78,7 +78,10 @@ def test_session_endpoint_says_sign_in_is_needed(guarded):
     port, _ = guarded
     status, data, _ = call(port, "/api/session")
     assert status == 200
-    assert data == {"authRequired": True, "signedIn": False, "user": "radek"}
+    assert data["authRequired"] is True
+    assert data["signedIn"] is False
+    assert data["user"] == "radek"
+    assert data["viaProxy"] is False
 
 
 def test_shell_html_stays_public_so_the_form_can_render(guarded):
@@ -192,7 +195,9 @@ def test_no_credentials_means_no_sign_in(sonarr, tmp_path):
     try:
         port = server.server_address[1]
         status, data, _ = call(port, "/api/session")
-        assert data == {"authRequired": False, "signedIn": True, "user": ""}
+        assert data["authRequired"] is False
+        assert data["signedIn"] is True
+        assert data["user"] == ""
         assert call(port, "/api/state")[0] == 200
     finally:
         server.shutdown()

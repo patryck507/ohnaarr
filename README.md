@@ -7,7 +7,7 @@
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Sonarr](https://img.shields.io/badge/Sonarr-v4%20%7C%20v5-5bc0de)
 ![Radarr](https://img.shields.io/badge/Radarr-v3-ffc230)
-![Tests](https://img.shields.io/badge/tests-222%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-240%20passing-brightgreen)
 [![Docker Hub](https://img.shields.io/docker/v/patryck507/ohnaarr?label=docker%20hub&sort=semver)](https://hub.docker.com/r/patryck507/ohnaarr)
 [![Image size](https://img.shields.io/docker/image-size/patryck507/ohnaarr/latest)](https://hub.docker.com/r/patryck507/ohnaarr)
 [![Publish image](https://github.com/patryck507/ohnaarr/actions/workflows/docker.yml/badge.svg)](https://github.com/patryck507/ohnaarr/actions/workflows/docker.yml)
@@ -119,7 +119,7 @@ docker compose up -d
 ```
 
 Images: [`patryck507/ohnaarr`](https://hub.docker.com/r/patryck507/ohnaarr) —
-`latest` and `1.2.0`, `linux/amd64`, about 50 MB compressed. To build it
+`latest` and `1.3.0`, `linux/amd64`, about 50 MB compressed. To build it
 yourself instead:
 
 ```bash
@@ -159,9 +159,9 @@ needs **no** media volumes.
 | page | what it does |
 | --- | --- |
 | **Dashboard** | repairs per day, totals, which strategy did the matching, recent passes |
-| **Decisions** | the last run as a diff: filename, what it resolved to, and why |
-| **Queue** | both queues, stuck items marked, `matched by ID` flagged, *arr messages |
-| **History** | what was imported and how; unplaced files with a **Try again** button |
+| **Decisions** | the last run as a diff: filename, what it resolved to, and why; **Teach it** on anything unresolved |
+| **Queue** | both queues, stuck items marked, `matched by ID` flagged, **Fix now** per item |
+| **History** | what was imported and how; unplaced files with **Try again**, **Try all again** and **Teach it** |
 | **Connections** | Sonarr and Radarr: address, key, API base, health, **Test connection** |
 | **Settings** | everything else, grouped, with validation and per-field provenance |
 | **Overrides** | the aliases/replacements file, edited in place |
@@ -172,6 +172,10 @@ being written as you type. Each field shows where its value came from (`set by
 SONARR_URL` / `saved here`), and a saved value can be dropped so the environment
 applies again. Settings are written to `/config/settings.json`; a value saved in
 the UI wins over the same environment variable.
+
+The interface is in English and German, with a switch in the rail that applies
+immediately and is remembered per browser. `UI_LANGUAGE` sets the default;
+`auto` follows the browser.
 
 The whole interface is one self-contained HTML file: no build step, no CDN, no
 webfont, no outbound requests.
@@ -203,6 +207,33 @@ Failures are recorded in SQLite: `MAX_ATTEMPTS` tries per file with
 `ATTEMPT_BACKOFF_SECONDS` between them, then the file is left alone (the History
 page can clear that). Imported files are never reprocessed.
 
+### Teaching it a name
+
+When nothing matches, the file lands under **Needs you** with a **Teach it**
+button. Search your library, pick the right series or movie, and ohnaarr writes
+the alias into `overrides.yml`, forgets the failed attempt and tries again. The
+rule applies from the next run on, and the file stays a plain, editable YAML
+entry:
+
+```yaml
+series_aliases:
+  haus m d: 33
+```
+
+### Push instead of waiting
+
+Sonarr and Radarr can call ohnaarr the moment an import gets stuck, so a repair
+happens in seconds rather than at the next scan.
+
+1. **Settings → Behaviour → Accept a push from Sonarr**, set a token.
+2. Copy the URL the page then shows: `http://<host>:8787/api/hook?token=<token>`
+3. In Sonarr: **Settings → Connect → + → Webhook**, method POST, tick
+   **On Manual Interaction Required**, paste the URL. Radarr is the same.
+
+The token is the only gate on that endpoint, because an *arr webhook cannot send
+custom headers. A `Test` from the *arr is answered without starting a run, and
+the scheduled scan keeps running as a safety net.
+
 ---
 
 ## Discord notifications
@@ -230,8 +261,11 @@ ohnaarr · 4 import(s) fixed
 📺 Tatort S01E02 — sonarr rejected: notQualityUpgrade: Existing file has better quality
    alt.mkv
 
-ohnaarr v1.2.0 · import mode: auto · sonarr + radarr
+ohnaarr v1.3.0 · import mode: auto · sonarr + radarr
 ```
+
+A `health` event posts separately when an *arr stops answering and when it comes
+back, since a run that cannot happen would otherwise be silent.
 
 The colour follows the worst outcome in the run: green for a clean import,
 yellow when something needs a look, red on failure, blurple for a dry run. A run
@@ -275,6 +309,8 @@ All of it is editable in the UI; the environment variables are the defaults.
 | `VIDEO_EXTENSIONS` | `mkv,mp4,avi,…` | comma separated |
 | `IGNORED_REJECTIONS` | see below | *arr complaints a manual import is meant to overrule |
 | `EXTRA_FOLDER_SCAN` | — | comma-separated folders to sweep for files that never reached the queue |
+| `HOOK_ENABLED` | `false` | accept a push from Sonarr/Radarr instead of only scanning |
+| `HOOK_TOKEN` | — | required in the push URL |
 
 ### Matching
 
@@ -301,12 +337,15 @@ All of it is editable in the UI; the environment variables are the defaults.
 | variable | default | meaning |
 | --- | --- | --- |
 | `WEBHOOK_URL` | — | Discord webhook → rich embed; any other URL → plain JSON |
-| `NOTIFY_EVENTS` | `imported,unresolved,errors` | `imported` \| `unresolved` \| `rejected` \| `errors` \| `dry_run` \| `every_run` |
+| `NOTIFY_EVENTS` | `imported,unresolved,errors` | `imported` \| `unresolved` \| `rejected` \| `errors` \| `dry_run` \| `every_run` \| `health` |
 | `NOTIFY_MAX_ITEMS` | `10` | files listed per embed section |
 | `NOTIFY_USERNAME` | `ohnaarr` | webhook display name (Discord) |
 | `NOTIFY_AVATAR_URL` | — | webhook avatar (Discord) |
 | `WEB_USERNAME` / `WEB_PASSWORD` | — | put the interface behind a sign-in form |
 | `SESSION_HOURS` | `336` | how long a sign-in lasts; a restart always ends it |
+| `UI_LANGUAGE` | `auto` | `auto` \| `en` \| `de` |
+| `TRUSTED_PROXY_HEADER` | — | header an authenticating proxy sets, e.g. `Remote-User` |
+| `TRUSTED_PROXY_IPS` | — | addresses allowed to send it; empty means any |
 | `LOG_LEVEL` | `INFO` | `DEBUG` prints every match decision |
 
 ### Deployment (environment only, needs a restart)
@@ -376,6 +415,11 @@ GET  /api/state                   status + settings schema + current values
 GET  /api/stats?days=14           dashboard figures, daily series, run history
 GET  /api/queue                   both queues, annotated with what is stuck
 POST /api/run                     {"preview": true} forces a dry run
+POST /api/hook?token=…            Sonarr/Radarr push: run now (no sign-in, no CSRF header)
+POST /api/fix                     repair one queue item: {"id": 41, "kind": "series"}
+POST /api/retry                   forget every unplaced file
+GET  /api/lookup?term=…&kind=…    search the library
+POST /api/teach                   pin a release name: {"name": …, "targetId": 33}
 POST /api/settings /api/test      save settings, probe an *arr
 POST /api/explain                 {"name": "<release name>"}
 GET  /api/overrides  POST /api/overrides
@@ -396,6 +440,13 @@ POST /api/notify/test             send a sample notification
   new password signs every other browser out while keeping yours in.
 - **Failed sign-ins are throttled** per client address: 8 attempts, then five
   minutes of `429`.
+- **Behind an authenticating proxy** (Authelia, Authentik), set
+  `TRUSTED_PROXY_HEADER` to the header it sets and `TRUSTED_PROXY_IPS` to the
+  proxy's address. A request carrying that header is treated as signed in, so
+  only set it when nothing but the proxy can reach the port.
+- **The push endpoint** is reachable without a sign-in by design — Sonarr cannot
+  sign in — so give it a `HOOK_TOKEN` and leave it off when unused. It only ever
+  triggers a run; it carries no data from the caller into the pipeline.
 - **Without credentials the interface is open** to anyone who can reach the
   port, and it holds your *arr API keys. Do not publish port 8787.
 - **Secrets are never echoed back.** `GET /api/state` returns `value: null` for
@@ -428,11 +479,12 @@ POST /api/notify/test             send a sample notification
 ```bash
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt pytest
-.venv/bin/python -m pytest        # 222 tests
+.venv/bin/python -m pytest        # 240 tests
+.venv/bin/python -m ruff check ohnaarr tests
 ```
 
-The pipeline, both HTTP clients, the sign-in flow and the web API run against
-mock Sonarr v4/v5, Radarr v3 and webhook servers — including the `House.M.D`
+The pipeline, both HTTP clients, the sign-in flow, the push endpoint and the
+web API run against mock Sonarr v4/v5, Radarr v3 and webhook servers — including the `House.M.D`
 season-pack case above, and the Sonarr v4 quirks (`downloadId` is singular,
 `includeSubresources` is ignored, one queue record per episode).
 

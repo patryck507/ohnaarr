@@ -261,7 +261,10 @@ def test_informational_rejection_is_overruled(cfg, state):
     path = f"/downloads/{RELEASE}/{RELEASE}.mkv"
     mock = MockRadarr(
         [queue_item(movie={"id": 1, "title": "x"})],
-        [candidate(f"{RELEASE}.mkv", rejections=[{"reason": "Unknown Movie", "type": "permanent"}])],
+        [candidate(
+            f"{RELEASE}.mkv",
+            rejections=[{"reason": "Unknown Movie", "type": "permanent"}],
+        )],
         reprocess_rejections={path: [{"reason": "Unknown Movie", "type": "permanent"}]},
     )
     try:

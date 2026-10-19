@@ -1,6 +1,6 @@
 [project]
 name = "ohnaarr"
-version = "1.2.0"
+version = "1.3.0"
 description = "Unattended repair of stuck Sonarr/Radarr imports (German umlauts, naming, ID-matched releases), with a web interface"
 requires-python = ">=3.11"
 dependencies = [
@@ -24,3 +24,10 @@ include = ["ohnaarr*"]
 
 [tool.setuptools.package-data]
 ohnaarr = ["static/*.html", "static/*.png"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4"]

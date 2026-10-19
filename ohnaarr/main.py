@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import signal
@@ -34,10 +35,9 @@ def _install_signal_handlers(service: Service) -> None:
         service.stop()
 
     for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
+        # Not every platform or thread can take a handler; that is fine.
+        with contextlib.suppress(ValueError, OSError):
             signal.signal(sig, handler)
-        except (ValueError, OSError):
-            pass
 
 
 def cmd_run(cfg: Config, args: argparse.Namespace) -> int:

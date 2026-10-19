@@ -139,6 +139,12 @@ class State:
         self._conn.execute("DELETE FROM attempts WHERE key = ?", (key,))
         self._conn.commit()
 
+    def reset_unresolved(self) -> int:
+        """Forget every file that is still unplaced, so they are all tried again."""
+        cursor = self._conn.execute("DELETE FROM attempts WHERE resolved = 0")
+        self._conn.commit()
+        return int(cursor.rowcount or 0)
+
     def reset_prefix(self, path_prefix: str) -> int:
         """Forget every record whose key starts with `path_prefix`.
 
@@ -238,7 +244,7 @@ class State:
         )
         out = []
         for row in rows:
-            record = dict(zip(keys, row))
+            record = dict(zip(keys, row, strict=False))
             record["dryRun"] = bool(record["dryRun"])
             out.append(record)
         return out

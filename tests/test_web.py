@@ -14,7 +14,6 @@ from ohnaarr.config import Config
 from ohnaarr.service import Service
 from tests.test_integration import MockSonarr
 
-
 _DEFAULT_HEADERS = {"X-Ohnaarr": "1"}
 
 

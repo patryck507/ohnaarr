@@ -12,10 +12,12 @@ rejects the whole message when any one of them is exceeded:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import time
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import httpx
 
@@ -72,9 +74,7 @@ def should_notify(cfg: Config, report: RunReport) -> bool:
         return True
     if report.rejected and "rejected" in events:
         return True
-    if report.planned and "dry_run" in events:
-        return True
-    return False
+    return bool(report.planned and "dry_run" in events)
 
 
 def send(cfg: Config, report: RunReport) -> bool:
@@ -86,6 +86,34 @@ def send(cfg: Config, report: RunReport) -> bool:
         if is_discord(cfg.webhook_url)
         else {"summary": report.as_dict(), "dryRun": cfg.dry_run}
     )
+    return _post(cfg.webhook_url, payload)
+
+
+def send_health(cfg: Config, name: str, *, up: bool, detail: str = "") -> bool:
+    """Tell the webhook that an *arr went away or came back.
+
+    Run notifications only fire when a run happens; an instance that cannot be
+    reached at all would otherwise stay silent exactly when it matters.
+    """
+    if not cfg.webhook_url or "health" not in cfg.notify_events:
+        return False
+    if is_discord(cfg.webhook_url):
+        embed = {
+            "title": f"{name} is back" if up else f"{name} is not answering",
+            "description": _escape(_clip(detail, 500)) if detail else (
+                "Imports continue as normal." if up
+                else "ohnaarr cannot reach it, so nothing can be repaired."
+            ),
+            "color": COLOR_IMPORTED if up else COLOR_ERROR,
+            "footer": {"text": _footer(cfg)},
+        }
+        payload: JSON = {"embeds": [embed]}
+        if cfg.notify_username:
+            payload["username"] = _clip(cfg.notify_username, 80)
+        if cfg.notify_avatar_url:
+            payload["avatar_url"] = cfg.notify_avatar_url
+    else:
+        payload = {"event": "health", "target": name, "up": up, "detail": detail}
     return _post(cfg.webhook_url, payload)
 
 
@@ -318,10 +346,8 @@ def _post(url: str, payload: JSON, *, attempts: int = 3) -> bool:
         if resp.status_code == 429:
             # Discord rate limit; retry_after is seconds (float) in the body.
             delay = 1.0
-            try:
+            with contextlib.suppress(ValueError):
                 delay = float((resp.json() or {}).get("retry_after") or 1.0)
-            except ValueError:
-                pass
             delay = min(max(delay, 0.2), 10.0)
             if attempt < attempts:
                 log.info("webhook rate limited, retrying in %.1fs", delay)

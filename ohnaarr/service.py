@@ -12,6 +12,9 @@ import threading
 import time
 from typing import Any
 
+import yaml
+from rapidfuzz import fuzz
+
 from . import episode_parse, movie_parse, normalize, notify
 from .config import Config
 from .fixer import ImportFixer, RunReport
@@ -72,7 +75,8 @@ def _friendly_error(exc: SonarrError | None, url: str, name: str) -> str:
         )
     if "ssl" in text or "certificate" in text:
         return f"TLS failed for {url}. Turn off certificate verification for a self-signed cert."
-    if "name or service not known" in text or "nodename nor servname" in text or "getaddrinfo" in text:
+    dns_markers = ("name or service not known", "nodename nor servname", "getaddrinfo")
+    if any(marker in text for marker in dns_markers):
         return f"The hostname in {url} does not resolve from inside this container."
     if "refused" in text:
         return (
@@ -293,11 +297,14 @@ class Service:
         if not self.cfg.configured:
             self._set_status(healthy=False, last_error="not configured")
             return
+        was_healthy = self.status().get("healthy")
         try:
             info = self.client.system_status()
             self._set_status(
                 healthy=True, sonarr_version=info.get("version"), last_error=None
             )
+            if was_healthy is False:
+                self._announce_health("Sonarr", up=True)
             log.info(
                 "connected to Sonarr %s (%s) - dry_run=%s import_mode=%s interval=%ds",
                 info.get("version"),
@@ -309,19 +316,26 @@ class Service:
         except SonarrError as exc:
             log.error("cannot reach Sonarr: %s", exc)
             self._set_status(healthy=False, last_error=str(exc))
+            if was_healthy:
+                self._announce_health("Sonarr", up=False, detail=str(exc))
         self._probe_radarr()
 
     def _probe_radarr(self) -> None:
         if not self.cfg.radarr_configured:
             self._set_status(radarr_healthy=None, radarr_version=None)
             return
+        was_healthy = self.status().get("radarr_healthy")
         try:
             info = self.radarr.system_status()
             self._set_status(radarr_healthy=True, radarr_version=info.get("version"))
             log.info("connected to Radarr %s (%s)", info.get("version"), self.cfg.radarr_base_url)
+            if was_healthy is False:
+                self._announce_health("Radarr", up=True)
         except SonarrError as exc:
             log.error("cannot reach Radarr: %s", exc)
             self._set_status(radarr_healthy=False)
+            if was_healthy:
+                self._announce_health("Radarr", up=False, detail=str(exc))
 
     # --- operations the web interface exposes -----------------------------
 
@@ -603,6 +617,130 @@ class Service:
                     "url": self.cfg.radarr_url,
                 },
             },
+        }
+
+    def _announce_health(self, name: str, *, up: bool, detail: str = "") -> None:
+        """One message when an *arr goes away, one when it comes back."""
+        try:
+            notify.send_health(self.cfg, name, up=up, detail=detail)
+        except Exception:  # noqa: BLE001 - a webhook must never break a probe
+            log.exception("health notification failed")
+
+    def fix_one(self, queue_id: int, kind: str = "series") -> JSON:
+        """Repair a single queue item now, for the button on the Queue page."""
+        with self._run_lock:
+            self.cfg.reload()
+            if kind == "movie":
+                if not self.cfg.radarr_configured:
+                    raise SonarrError("Radarr is not configured")
+                report = MovieImportFixer(self.radarr, self.cfg, self.state).run_one(queue_id)
+            else:
+                if not self.cfg.configured:
+                    raise SonarrError("Sonarr is not configured")
+                report = ImportFixer(self.client, self.cfg, self.state).run_one(queue_id)
+            self._set_status(last_run=report.as_dict(), last_run_at=time.time())
+            self._bump_status(imported_total=report.imported)
+            self.state.record_run(report.as_dict(), dry_run=self.cfg.dry_run)
+            return {"ok": True, "report": report.as_dict()}
+
+    def retry_all(self) -> JSON:
+        """Clear every unplaced file's history so the next run tries them again."""
+        removed = self.state.reset_unresolved()
+        if removed:
+            self.trigger()
+        return {"ok": True, "removed": removed}
+
+    def lookup(self, term: str, kind: str = "series", limit: int = 20) -> JSON:
+        """Search the library - what is already added, not what could be added."""
+        term = (term or "").strip()
+        if kind == "movie":
+            if not self.cfg.radarr_configured:
+                raise SonarrError("Radarr is not configured")
+            entries = [
+                {
+                    "id": movie.get("id"),
+                    "title": movie.get("title") or "",
+                    "year": movie.get("year"),
+                    "extra": movie.get("originalTitle") or "",
+                }
+                for movie in self.radarr.movies()
+            ]
+        else:
+            if not self.cfg.configured:
+                raise SonarrError("Sonarr is not configured")
+            entries = [
+                {
+                    "id": series.get("id"),
+                    "title": series.get("title") or "",
+                    "year": series.get("year"),
+                    "extra": series.get("originalTitle") or "",
+                }
+                for series in self.client.series()
+            ]
+
+        if term:
+            needle = normalize.fold_plain(term)
+            scored = []
+            for entry in entries:
+                hay = normalize.fold_plain(f"{entry['title']} {entry['extra']}")
+                score = fuzz.token_set_ratio(needle, hay)
+                if needle in hay:
+                    score = max(score, 95)
+                if score >= 55:
+                    scored.append((score, entry))
+            scored.sort(key=lambda pair: (-pair[0], pair[1]["title"]))
+            entries = [entry for _, entry in scored]
+        else:
+            entries.sort(key=lambda entry: entry["title"])
+
+        return {"results": entries[:limit], "total": len(entries), "kind": kind}
+
+    def teach(self, name: str, target_id: int, *, kind: str = "series",
+              path: str = "") -> JSON:
+        """Pin a release name to a series or movie, permanently.
+
+        The alias is written to the overrides file the same way a human would
+        write it, so it stays readable and editable afterwards.
+        """
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("a release or file name is required")
+
+        if kind == "movie":
+            parsed = movie_parse.parse_movie(name)
+            hint = parsed.title or normalize.clean_release_title(name, keep_years=True)
+            known = {int(m.get("id")): m.get("title") for m in self.radarr.movies()}
+        else:
+            hint = episode_parse.series_title_hint(name) or normalize.clean_release_title(name)
+            known = {int(s.get("id")): s.get("title") for s in self.client.series()}
+
+        target_id = int(target_id)
+        if target_id not in known:
+            raise ValueError("that is not a series or movie in your library")
+
+        alias = normalize.fold_plain(hint).strip()
+        if not alias:
+            raise ValueError("could not read a title out of that name")
+
+        data = yaml.safe_load(self.cfg.overrides_text() or "") or {}
+        if not isinstance(data, dict):
+            raise ValueError("the overrides file is not a YAML mapping")
+        aliases = dict(data.get("series_aliases") or {})
+        aliases[alias] = target_id
+        data["series_aliases"] = aliases
+        self.cfg.save_overrides_text(
+            yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+        )
+
+        if path:
+            self.state.reset_prefix(path)
+        self.trigger()
+        return {
+            "ok": True,
+            "alias": alias,
+            "target": known[target_id],
+            "targetId": target_id,
+            "aliases": len(aliases),
         }
 
     def forget(self, path_key: str) -> JSON:

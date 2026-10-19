@@ -25,7 +25,7 @@ def report_with(*outcomes: FileOutcome, checked: int = 1, duration: float = 2.0)
 
 
 def episode(action="imported", **kw) -> FileOutcome:
-    base = dict(
+    base = dict(  # noqa: C408 - keyword form reads better for a fixture
         path="/downloads/House.M.D.2004.S03.German.DL/House.M.D.S03E01.German.mkv",
         action=action,
         series_id=21,
@@ -39,7 +39,7 @@ def episode(action="imported", **kw) -> FileOutcome:
 
 
 def movie(action="imported", **kw) -> FileOutcome:
-    base = dict(
+    base = dict(  # noqa: C408 - keyword form reads better for a fixture
         path="/downloads/Der.Herr.der.Ringe.2003.German/film.mkv",
         action=action,
         movie_id=7,

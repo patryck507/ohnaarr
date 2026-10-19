@@ -16,7 +16,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, field, fields as dataclass_fields
+from dataclasses import dataclass, field
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +78,7 @@ DEFAULT_MOVIE_IGNORED: tuple[str, ...] = (
 # Run outcomes that can trigger a notification.
 NOTIFY_EVENT_CHOICES: tuple[str, ...] = (
     "imported", "unresolved", "rejected", "errors", "dry_run", "every_run",
+    "health",
 )
 DEFAULT_NOTIFY_EVENTS: tuple[str, ...] = ("imported", "unresolved", "errors")
 
@@ -162,7 +164,8 @@ FIELDS: tuple[FieldSpec, ...] = (
 
     # --- behaviour ---
     FieldSpec("dry_run", "DRY_RUN", "bool", "Dry run", "behaviour",
-              "Decide and log everything, but issue no import. Leave on until the log looks right."),
+              "Decide and log everything, but issue no import. Leave it on until "
+              "the log looks right."),
     FieldSpec("interval_seconds", "INTERVAL_SECONDS", "int", "Scan interval (s)", "behaviour",
               "Pause between runs", minimum=30, maximum=86400),
     FieldSpec("import_mode", "IMPORT_MODE", "choice", "Import mode", "behaviour",
@@ -179,6 +182,12 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("extra_folder_scan", "EXTRA_FOLDER_SCAN", "csv", "Extra folders to scan", "behaviour",
               "Comma separated paths, as Sonarr sees them. Sweeps files that never "
               "reached the queue. Leave empty to scan the queue only."),
+
+    FieldSpec("hook_enabled", "HOOK_ENABLED", "bool", "Accept a push from Sonarr", "behaviour",
+              "Sonarr can call ohnaarr the moment an import gets stuck, instead of "
+              "waiting for the next scan. The scan keeps running as a safety net."),
+    FieldSpec("hook_token", "HOOK_TOKEN", "secret", "Push token", "behaviour",
+              "Required in the push URL. Leave empty only on a trusted network."),
 
     # --- radarr ---
     FieldSpec("radarr_enabled", "RADARR_ENABLED", "bool", "Handle Radarr too", "radarr",
@@ -241,6 +250,18 @@ FIELDS: tuple[FieldSpec, ...] = (
               "interface", "Discord only; optional"),
     FieldSpec("log_level", "LOG_LEVEL", "choice", "Log level", "interface",
               choices=("DEBUG", "INFO", "WARNING", "ERROR")),
+    FieldSpec("ui_language", "UI_LANGUAGE", "choice", "Interface language", "interface",
+              "English, German, or whatever the browser asks for",
+              choices=("auto", "en", "de")),
+    FieldSpec("trusted_proxy_header", "TRUSTED_PROXY_HEADER", "str",
+              "Trusted sign-in header", "interface",
+              "For Authelia/Authentik in front of ohnaarr, e.g. Remote-User. A request "
+              "carrying it is treated as signed in, so only set this when a proxy "
+              "strips the header from outside traffic."),
+    FieldSpec("trusted_proxy_ips", "TRUSTED_PROXY_IPS", "csv", "Addresses that may send it",
+              "interface",
+              "Comma separated. Empty means any address, which is only safe when "
+              "nothing but the proxy can reach this port."),
     FieldSpec("web_username", "WEB_USERNAME", "str", "Sign-in username", "interface",
               "Set a username and password to put this interface behind a sign-in form"),
     FieldSpec("web_password", "WEB_PASSWORD", "secret", "Sign-in password", "interface",
@@ -322,6 +343,11 @@ class Config:
     notify_username: str = "ohnaarr"
     notify_avatar_url: str = ""
     log_level: str = "INFO"
+    hook_enabled: bool = False
+    hook_token: str = ""
+    ui_language: str = "auto"
+    trusted_proxy_header: str = ""
+    trusted_proxy_ips: list[str] = field(default_factory=list)
     web_username: str = ""
     web_password: str = ""
     session_hours: int = 336
@@ -363,7 +389,7 @@ class Config:
     # --- construction -----------------------------------------------------
 
     @classmethod
-    def from_env(cls) -> "Config":
+    def from_env(cls) -> Config:
         """Defaults overlaid with the environment, then with settings.json."""
         cfg = cls()
         cfg._apply_env()
@@ -567,7 +593,7 @@ class Config:
             problems.append("Radarr is enabled but its API key is not set")
         return problems
 
-    def copy_from(self, other: "Config") -> None:
+    def copy_from(self, other: Config) -> None:
         """Adopt another config's values in place (keeps existing references valid)."""
         for f in dataclass_fields(self):
             setattr(self, f.name, getattr(other, f.name))

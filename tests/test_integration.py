@@ -87,7 +87,9 @@ def _candidates():
                 "episodeFileId": 0,
                 "releaseGroup": "WAREZCX",
                 "quality": {
-                    "quality": {"id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080},
+                    "quality": {
+                        "id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080,
+                    },
                     "revision": {"version": 1, "real": 0, "isRepack": False},
                 },
                 "languages": [{"id": 4, "name": "German"}],
@@ -233,7 +235,10 @@ def test_full_run_imports_season_pack_over_http(mock_sonarr, cfg, tmp_path):
     assert mock_sonarr.reprocessed and len(mock_sonarr.reprocessed[0]) == 2
 
     # downloadIds is sent as a repeated query parameter, as Sonarr expects.
-    manual_gets = [r for r in mock_sonarr.requests if r[1].endswith("/manualimport") and r[0] == "GET"]
+    manual_gets = [
+        r for r in mock_sonarr.requests
+        if r[1].endswith("/manualimport") and r[0] == "GET"
+    ]
     assert manual_gets[0][2]["downloadIds"] == ["ABCDEF0123"]
     assert manual_gets[0][2]["filterExistingFiles"] == ["false"]
 

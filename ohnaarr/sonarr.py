@@ -68,7 +68,7 @@ class SonarrClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "SonarrClient":
+    def __enter__(self) -> SonarrClient:
         return self
 
     def __exit__(self, *_exc: object) -> None:

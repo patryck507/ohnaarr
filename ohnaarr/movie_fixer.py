@@ -81,6 +81,42 @@ class MovieImportFixer:
 
     # --- entry point ------------------------------------------------------
 
+    def run_one(self, queue_id: int) -> RunReport:
+        """Repair a single Radarr queue item."""
+        report = RunReport()
+        self._index = None
+        try:
+            stuck = self._stuck_queue_items()
+        except SonarrError as exc:
+            log.error("could not read the Radarr queue: %s", exc)
+            report.errors += 1
+            report.duration = time.time() - report.started
+            return report
+
+        wanted = [item for item in stuck if _as_int(item.get("id")) == queue_id]
+        if not wanted:
+            report.add(
+                FileOutcome(
+                    path=str(queue_id),
+                    action="skipped",
+                    reason="that download is no longer stuck",
+                )
+            )
+            report.duration = time.time() - report.started
+            return report
+
+        for item in wanted:
+            report.checked += 1
+            try:
+                self._handle_queue_item(item, report)
+            except SonarrError as exc:
+                log.error("radarr queue item %s failed: %s", item.get("title"), exc)
+                report.add(
+                    FileOutcome(path=str(item.get("title") or ""), action="error", reason=str(exc))
+                )
+        report.duration = time.time() - report.started
+        return report
+
     def run(self) -> RunReport:
         report = RunReport()
         self._index = None
@@ -230,7 +266,10 @@ class MovieImportFixer:
             return self._planned(path, queue_movie_id, index, "grab-history")
 
         # 3. Title + year, from the file name, then the folder, then the release.
-        for source, label in ((repaired, "filename"), (folder_name, "folder"), (context_name, "release")):
+        sources = (
+            (repaired, "filename"), (folder_name, "folder"), (context_name, "release"),
+        )
+        for source, label in sources:
             if not source:
                 continue
             hit = index.match(source, self._cfg.movie_match_threshold)

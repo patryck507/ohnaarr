@@ -6,8 +6,9 @@ import logging
 import os
 import re
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from . import episode_parse, normalize
 from .config import HARD_REJECTIONS, Config
@@ -108,7 +109,7 @@ class RunReport:
         else:
             self.skipped += 1
 
-    def merge(self, other: "RunReport") -> "RunReport":
+    def merge(self, other: RunReport) -> RunReport:
         """Fold another report in, for a pass that covers Sonarr and Radarr."""
         self.checked += other.checked
         self.imported += other.imported
@@ -146,11 +147,51 @@ class ImportFixer:
 
     # --- entry point ------------------------------------------------------
 
+    def prepare(self) -> None:
+        """Per-run setup: fresh overrides, fresh library view."""
+        self._cfg.load_overrides()
+        self._series_index = None
+        self._resolver = EpisodeResolver(self._client, self._cfg)
+
+    def run_one(self, queue_id: int) -> RunReport:
+        """Repair a single queue item, for the button on the Queue page."""
+        report = RunReport()
+        self.prepare()
+        try:
+            stuck = self._stuck_queue_items()
+        except SonarrError as exc:
+            log.error("could not read queue: %s", exc)
+            report.errors += 1
+            report.duration = time.time() - report.started
+            return report
+
+        wanted = [item for item in stuck if _as_int(item.get("id")) == queue_id]
+        if not wanted:
+            report.add(
+                FileOutcome(
+                    path=str(queue_id),
+                    action="skipped",
+                    reason="that download is no longer stuck",
+                )
+            )
+            report.duration = time.time() - report.started
+            return report
+
+        for item in wanted:
+            report.checked += 1
+            try:
+                self._handle_queue_item(item, report)
+            except SonarrError as exc:
+                log.error("queue item %s failed: %s", item.get("title"), exc)
+                report.add(
+                    FileOutcome(path=str(item.get("title") or ""), action="error", reason=str(exc))
+                )
+        report.duration = time.time() - report.started
+        return report
+
     def run(self) -> RunReport:
         report = RunReport()
-        self._cfg.load_overrides()
-        self._series_index = None  # refresh the library view each run
-        self._resolver = EpisodeResolver(self._client, self._cfg)
+        self.prepare()
 
         try:
             stuck = self._stuck_queue_items()
@@ -189,9 +230,7 @@ class ImportFixer:
         for item in items:
             state = str(item.get("trackedDownloadState") or "")
             status = str(item.get("trackedDownloadStatus") or "")
-            if state in STUCK_STATES and status in STUCK_STATUSES:
-                stuck.append(item)
-            elif state == "importBlocked":
+            if state in STUCK_STATES and status in STUCK_STATUSES or state == "importBlocked":
                 stuck.append(item)
         return stuck
 
@@ -591,7 +630,7 @@ class ImportFixer:
         command_id = _as_int(command.get("id"))
         ok = self._await_command(command_id) if command_id else True
 
-        for candidate, outcome, match in plans:
+        for candidate, outcome, _match in plans:
             if outcome.action != "planned":
                 continue
             key = _state_key(outcome.path, candidate.get("size"))

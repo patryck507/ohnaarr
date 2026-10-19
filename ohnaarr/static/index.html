@@ -93,6 +93,13 @@ code{font-family:var(--mono)}
 .rail .foot .who{display:flex;align-items:center;gap:8px;margin-bottom:7px;color:var(--dim)}
 .rail .foot .who b{font-weight:600;color:var(--text);font-family:var(--mono);min-width:0;
   overflow:hidden;text-overflow:ellipsis}
+.lang{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;
+  margin-bottom:9px}
+.lang button{background:none;border:0;color:var(--dimmer);cursor:pointer;
+  font:600 var(--t-xs)/1 var(--mono);padding:5px 8px}
+.lang button + button{border-left:1px solid var(--rule)}
+.lang button:hover{color:var(--text)}
+.lang button[aria-current="true"]{background:var(--slab-2);color:var(--signal)}
 
 main{min-width:0;padding-bottom:120px}
 
@@ -301,6 +308,23 @@ button.fig:hover{background:var(--slab-2)}
 .patch .meta .via{font-family:var(--mono);color:var(--dimmer)}
 .patch .acts{margin-top:9px}
 
+/* ---------- teach panel ---------- */
+.teach{border:1px solid var(--rule);border-radius:8px;background:var(--slab-2);
+  padding:12px 14px;margin-top:10px}
+.teach p{margin:0 0 9px;font-size:var(--t-xs);color:var(--dim)}
+.teach p b{color:var(--text);font-family:var(--mono);font-weight:600}
+.teach .find{display:flex;gap:8px}
+.teach .find input{flex:1}
+.hits{margin-top:10px;max-height:230px;overflow:auto;border:1px solid var(--rule);
+  border-radius:7px;background:var(--slab)}
+.hits button{display:flex;width:100%;gap:10px;align-items:baseline;text-align:left;
+  background:none;border:0;border-top:1px solid var(--rule-soft);color:var(--text);
+  font:var(--t-sm)/1.4 var(--sans);padding:9px 12px;cursor:pointer}
+.hits button:first-child{border-top:0}
+.hits button:hover{background:var(--slab-2)}
+.hits button span{margin-left:auto;font:var(--t-xs)/1.4 var(--mono);color:var(--dimmer)}
+.hits .none{padding:10px 12px;font-size:var(--t-xs);color:var(--dim)}
+
 /* ---------- tables ---------- */
 table{width:100%;border-collapse:collapse;font-size:var(--t-sm)}
 thead th{text-align:left;padding:0 12px 8px;font:500 var(--t-xs)/1 var(--sans);color:var(--dim);
@@ -461,6 +485,10 @@ input::placeholder{color:var(--dimmer)}
       <button class="nav" data-page="lab">Name lab</button>
     </nav>
     <div class="foot">
+      <div class="lang" id="langSwitch" role="group" aria-label="Language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="de">DE</button>
+      </div>
       <div class="who" id="whoAmI" hidden>
         <b id="whoName"></b>
         <button class="link quiet" id="btnSignOut">Sign out</button>
@@ -528,8 +556,9 @@ input::placeholder{color:var(--dimmer)}
             </div>
             <div class="panel">
               <header><h3>Recent passes</h3>
-                <p>Newest first. A pass marked <span class="tag">dry</span> decided but wrote
-                  nothing; its count is shown with an asterisk.</p></header>
+                <p data-i18n="Newest first. A pass marked dry decided but wrote nothing.">Newest
+                  first. A pass marked <span class="tag">dry</span> decided but wrote nothing; its
+                  count is shown with an asterisk.</p></header>
               <div id="dashRuns"></div>
             </div>
           </div>
@@ -575,8 +604,9 @@ input::placeholder{color:var(--dimmer)}
       <section class="page" id="page-settings" hidden>
         <div class="block">
           <h1>Settings</h1>
-          <p class="lede">Stored in <code>/config/settings.json</code>. A value saved here wins over
-            the matching environment variable. Addresses and API keys live on
+          <p class="lede" data-i18n="Stored in settings.json. A value saved here wins over the
+            environment variable.">Stored in <code>/config/settings.json</code>. A value saved
+            here wins over the matching environment variable. Addresses and API keys live on
             <button class="link" data-goto="connections">Connections</button>.</p>
           <div id="settingsOut"></div>
         </div>
@@ -628,7 +658,9 @@ input::placeholder{color:var(--dimmer)}
           </div>
           <div class="group" style="margin-top:28px">
             <h3><span class="mark m-unresolved" id="histBadMark"></span>Still unplaced
-              <span class="n" id="histBadN"></span></h3>
+              <span class="n" id="histBadN"></span>
+              <button class="act quiet" id="btnRetryAll" hidden
+                style="margin-left:auto">Try all again</button></h3>
             <div id="histBad"></div>
           </div>
         </div>
@@ -686,6 +718,552 @@ const CONN_KEYS = new Set(CONNS.flatMap((c) => c.keys));
 
 let STATE = null, STATS = null, SESSION = null, EDITS = {}, TESTED = {}, POLL = null;
 
+/* ---------- language ----------------------------------------------------
+   The English source text is the key, so an untranslated string still reads
+   correctly rather than showing a missing-key placeholder. `t` takes a plain
+   string; `T` is a tagged template, so a sentence with values in it stays one
+   translatable unit instead of being glued together from fragments. */
+let LANG = "en";
+
+const DE = {
+  // shell and navigation
+  "Import repair for Sonarr and Radarr": "Import-Reparatur für Sonarr und Radarr",
+  "Dashboard": "Übersicht",
+  "Decisions": "Entscheidungen",
+  "Queue": "Warteschlange",
+  "History": "Verlauf",
+  "Connections": "Verbindungen",
+  "Settings": "Einstellungen",
+  "Overrides": "Sonderregeln",
+  "Name lab": "Namenlabor",
+  "Sign out": "Abmelden",
+  "Sign in": "Anmelden",
+  "Username": "Benutzername",
+  "Password": "Passwort",
+  "Sign in to see the queue and change settings.":
+    "Melde dich an, um die Warteschlange zu sehen und Einstellungen zu ändern.",
+  "Signing in…": "Anmeldung läuft…",
+  "Starting up…": "Startet…",
+  "Preview changes": "Vorschau",
+  "Check now": "Jetzt prüfen",
+  "version {}": "Version {}",
+
+  // status line
+  "Not connected yet.": "Noch nicht verbunden.",
+  "Add your Sonarr address and API key to begin.":
+    "Trage Sonarr-Adresse und API-Schlüssel ein, um zu beginnen.",
+  "Watching <strong>Sonarr {}</strong>": "Überwacht <strong>Sonarr {}</strong>",
+  "<strong>Sonarr is not answering</strong>": "<strong>Sonarr antwortet nicht</strong>",
+  "and <strong>Radarr {}</strong>": "und <strong>Radarr {}</strong>",
+  "and <strong>Radarr is not answering</strong>": "und <strong>Radarr antwortet nicht</strong>",
+  " Running now.": " Läuft gerade.",
+  " Next check {}.": " Nächste Prüfung {}.",
+  " Checking every {} min.": " Prüft alle {} Min.",
+  "Cannot reach the ohnaarr service.": "Der ohnaarr-Dienst ist nicht erreichbar.",
+
+  // notices
+  "Dry run is on.": "Probelauf ist an.",
+  "Every move is worked out and none are written.":
+    "Jeder Schritt wird berechnet, aber nichts geschrieben.",
+  "Happy with the decisions?": "Sehen die Entscheidungen gut aus?",
+  "Turn dry run off": "Probelauf ausschalten",
+  "and ohnaarr will import from now on.": "und ohnaarr importiert ab jetzt selbst.",
+  "The last run hit a problem.": "Der letzte Durchlauf hatte ein Problem.",
+  "Dry run is off": "Probelauf ist aus",
+  "Imports are written from now on.": "Importe werden ab jetzt ausgeführt.",
+
+  // setup
+  "Point ohnaarr at Sonarr": "ohnaarr auf Sonarr richten",
+  "Sonarr address": "Sonarr-Adresse",
+  "API key": "API-Schlüssel",
+  "Connect": "Verbinden",
+  "Test first": "Erst testen",
+  "32 characters": "32 Zeichen",
+  "In Sonarr: Settings → General → API Key":
+    "In Sonarr: Einstellungen → Allgemein → API-Schlüssel",
+  "Connected to Sonarr": "Mit Sonarr verbunden",
+  "Could not connect": "Verbindung fehlgeschlagen",
+  "Version {}. Running a preview now.": "Version {}. Vorschau läuft.",
+
+  // dashboard
+  "Repairs per day": "Reparaturen pro Tag",
+  "Reading the numbers…": "Zahlen werden gelesen…",
+  "What did the matching": "Was die Zuordnung geschafft hat",
+  "Recent passes": "Letzte Durchläufe",
+  "No pass has run yet.": "Noch kein Durchlauf.",
+  "Nothing imported yet, so nothing to attribute.":
+    "Noch nichts importiert, also nichts zuzuordnen.",
+  "Nothing imported yet. Run a check and the repairs are charted here.":
+    "Noch nichts importiert. Starte eine Prüfung, dann erscheinen die Reparaturen hier.",
+  "No repairs in the last {} days": "Keine Reparaturen in den letzten {} Tagen",
+  "Could not read the statistics": "Statistik nicht lesbar",
+  "repaired today": "heute repariert",
+  "in the last 7 days": "in den letzten 7 Tagen",
+  "all time": "insgesamt",
+  "still unplaced": "noch nicht zugeordnet",
+  "gave up after {} tries": "nach {} Versuchen aufgegeben",
+  "gave up": "aufgegeben",
+  "passes today": "Durchläufe heute",
+  "average pass": "Durchschnitt pro Durchlauf",
+  "up for": "läuft seit",
+  "When": "Wann",
+  "Seen": "Gesehen",
+  "Placed": "Zugeordnet",
+  "Needs you": "Braucht dich",
+  "Failed": "Fehlgeschlagen",
+  "Took": "Dauer",
+
+  // decisions
+  "No run yet.": "Noch kein Durchlauf.",
+  "Imported": "Importiert",
+  "Ready to import": "Bereit zum Import",
+  "Refused by Sonarr": "Von Sonarr abgelehnt",
+  "Left alone": "Bewusst ausgelassen",
+  "Quiet run": "Ruhiger Durchlauf",
+  "Nothing in the queue needed attention.":
+    "Nichts in der Warteschlange brauchte Aufmerksamkeit.",
+  "Nothing needed fixing. Sonarr is importing on its own.":
+    "Nichts zu reparieren. Sonarr importiert von selbst.",
+  "matched by {}": "zugeordnet über {}",
+  "{} more like this in the same run": "{} weitere dieser Art im selben Durchlauf",
+  "no match": "keine Zuordnung",
+  "not matched": "nicht zugeordnet",
+  "season {} · {} {}": "Staffel {} · {} {}",
+  "episode": "Folge",
+  "episodes": "Folgen",
+
+  // runs
+  "Checking the queue…": "Warteschlange wird geprüft…",
+  "Working out the changes…": "Änderungen werden berechnet…",
+  "Reading the queue and matching what is stuck.":
+    "Warteschlange lesen und hängengebliebene Dateien zuordnen.",
+  "Preview ready": "Vorschau fertig",
+  "Pass finished": "Durchlauf beendet",
+  "Nothing needed fixing": "Nichts zu reparieren",
+  "Nothing in the queue": "Warteschlange ist leer",
+  "{} looked at, all importing on their own.":
+    "{} angesehen, alle importieren von selbst.",
+  "Sonarr and Radarr are holding nothing right now.":
+    "Sonarr und Radarr halten gerade nichts zurück.",
+  "{} imported": "{} importiert",
+  "{} ready to import": "{} bereit zum Import",
+  "{} need you": "{} brauchen dich",
+  "{} refused": "{} abgelehnt",
+  "{}, in {}s.": "{}, in {}s.",
+  "That did not work": "Das hat nicht geklappt",
+
+  // queue
+  "Refresh": "Aktualisieren",
+  "Fix now": "Jetzt reparieren",
+  "The queue is empty": "Die Warteschlange ist leer",
+  "Nothing is downloading or waiting to import.":
+    "Nichts lädt herunter oder wartet auf den Import.",
+  "Could not read the queue": "Warteschlange nicht lesbar",
+  "{} of {} need attention": "{} von {} brauchen Aufmerksamkeit",
+  "{}, none stuck": "{}, nichts hängt",
+  "Release": "Release",
+  "Goes to": "Geht an",
+  "State": "Status",
+  "matched by ID": "über ID zugeordnet",
+
+  // history
+  "Still unplaced": "Noch nicht zugeordnet",
+  "Try again": "Nochmal versuchen",
+  "Try all again": "Alle nochmal versuchen",
+  "Teach it": "Beibringen",
+  "Nothing yet": "Noch nichts",
+  "Imports are listed here as they happen.":
+    "Importe erscheinen hier, sobald sie passieren.",
+  "Nothing unplaced": "Nichts offen",
+  "Could not read the history": "Verlauf nicht lesbar",
+  "Queued for another try": "Für einen neuen Versuch vorgemerkt",
+  "{} is tried again on the next pass.": "{} wird beim nächsten Durchlauf erneut versucht.",
+  "{} will be tried again on the next pass.":
+    "{} werden beim nächsten Durchlauf erneut versucht.",
+  "tried {}× · {}": "{}× versucht · {}",
+
+  // teach
+  "Which {} is <b>{}</b>? Picking one writes a rule, so this release name matches by itself from now on.":
+    "Welche {} ist <b>{}</b>? Deine Auswahl wird als Regel gespeichert, damit dieser "
+    + "Release-Name ab jetzt von selbst passt.",
+  "series": "Serie",
+  "movie": "Film",
+  "Search your library": "Bibliothek durchsuchen",
+  "Search": "Suchen",
+  "Looking…": "Suche läuft…",
+  "Saving the rule…": "Regel wird gespeichert…",
+  "Nothing in your library matches that.": "Nichts in deiner Bibliothek passt dazu.",
+  "Rule saved": "Regel gespeichert",
+  "\"{}\" now means {}. Trying the file again.":
+    "„{}“ bedeutet jetzt {}. Die Datei wird erneut versucht.",
+
+  // connections
+  "Where ohnaarr reaches your library. Sonarr handles series, Radarr handles movies, and either one works on its own.":
+    "Wo ohnaarr deine Bibliothek erreicht. Sonarr kümmert sich um Serien, Radarr um "
+    + "Filme, und beide funktionieren auch allein.",
+  "Test connection": "Verbindung testen",
+  "Add Radarr": "Radarr hinzufügen",
+  "Stop handling movies": "Filme nicht mehr behandeln",
+  "Answering": "Antwortet",
+  "Answering · {}": "Antwortet · {}",
+  "Not answering": "Antwortet nicht",
+  "Not checked yet": "Noch nicht geprüft",
+  "Needs an address and key": "Braucht Adresse und Schlüssel",
+  "Not handling {}": "Behandelt {} nicht",
+  "no address yet · handles {}": "noch keine Adresse · behandelt {}",
+  "movies": "Filme",
+  "Series, seasons and episodes.": "Serien, Staffeln und Folgen.",
+  "Movies, matched by title and year.": "Filme, über Titel und Jahr zugeordnet.",
+  "Movies are left to Radarr itself until you add it here.":
+    "Filme bleiben bei Radarr selbst, bis du es hier hinzufügst.",
+  "ohnaarr only reads the queue and posts manual imports. It never deletes a file, blocklists a release, or marks a download as failed.":
+    "ohnaarr liest nur die Warteschlange und löst manuelle Importe aus. Es löscht nie "
+    + "eine Datei, sperrt kein Release und markiert keinen Download als fehlgeschlagen.",
+  "{} answered": "{} hat geantwortet",
+  "{} did not answer": "{} hat nicht geantwortet",
+  "Radarr added": "Radarr hinzugefügt",
+  "Fill in the address and key, then save changes.":
+    "Adresse und Schlüssel eintragen, dann speichern.",
+
+  // settings
+  "Stored in": "Gespeichert in",
+  "A value saved here wins over the matching environment variable. Addresses and API keys live on":
+    "Ein hier gespeicherter Wert gewinnt gegen die Umgebungsvariable. Adressen und "
+    + "API-Schlüssel stehen unter",
+  "saved here": "hier gespeichert",
+  "use {} instead": "stattdessen {} benutzen",
+  "set by": "gesetzt durch",
+  "On": "An",
+  "Off": "Aus",
+  "saved — type to replace": "gespeichert — zum Ersetzen tippen",
+  "not set": "nicht gesetzt",
+  "1 unsaved change": "1 ungespeicherte Änderung",
+  "{} unsaved changes": "{} ungespeicherte Änderungen",
+  "Discard": "Verwerfen",
+  "Save changes": "Änderungen speichern",
+  "Settings saved": "Einstellungen gespeichert",
+  "{} updated. They apply on the next pass.":
+    "{} aktualisiert. Gilt ab dem nächsten Durchlauf.",
+  "Other browsers were signed out; this one stays in.":
+    "Andere Browser wurden abgemeldet, dieser bleibt angemeldet.",
+  "Changes discarded": "Änderungen verworfen",
+  "Nothing was written.": "Es wurde nichts geschrieben.",
+  "Back to the environment value": "Zurück zum Wert der Umgebungsvariable",
+  "{} is no longer saved here.": "{} ist hier nicht mehr gespeichert.",
+  "Send a test message": "Testnachricht senden",
+  "Test message sent": "Testnachricht gesendet",
+  "It went to your {} webhook.": "Sie ging an deinen {}-Webhook.",
+  "The message did not go through": "Die Nachricht kam nicht durch",
+  "Copy": "Kopieren",
+  "Copied": "Kopiert",
+  "Paste it into the Sonarr webhook.": "Füge sie in den Sonarr-Webhook ein.",
+  "Could not copy": "Kopieren nicht möglich",
+  "Select the URL and copy it by hand.": "Markiere die URL und kopiere sie von Hand.",
+  "setting": "Einstellung",
+  "settings": "Einstellungen",
+
+  // settings group blurbs
+  "Extra Sonarr options. The address and key are on Connections.":
+    "Weitere Sonarr-Optionen. Adresse und Schlüssel stehen unter Verbindungen.",
+  "How movie titles are recognised.": "Wie Filmtitel erkannt werden.",
+  "What ohnaarr may do, and how often it looks.":
+    "Was ohnaarr tun darf und wie oft es nachsieht.",
+  "How hard it tries to recognise a name before handing it back to you.":
+    "Wie sehr es sich um einen Namen bemüht, bevor es ihn dir zurückgibt.",
+  "Limits that stop one awkward file being retried forever.":
+    "Grenzen, damit eine sperrige Datei nicht endlos wiederholt wird.",
+  "Notifications, logging, and who may open this page.":
+    "Benachrichtigungen, Protokoll und wer diese Seite öffnen darf.",
+  "Set outside the app. Changing these needs a container restart.":
+    "Außerhalb der App gesetzt. Änderungen brauchen einen Neustart des Containers.",
+
+  // overrides
+  "Save rules": "Regeln speichern",
+  "Insert an example": "Beispiel einfügen",
+  "Rules saved": "Regeln gespeichert",
+  "{} in effect from the next pass.": "{} gelten ab dem nächsten Durchlauf.",
+  "No aliases": "Keine Aliase",
+  "alias": "Alias",
+  "aliases": "Aliase",
+  "The rules were not saved": "Die Regeln wurden nicht gespeichert",
+  "Example inserted": "Beispiel eingefügt",
+  "Edit it, then save the rules.": "Passe es an und speichere die Regeln.",
+
+  // name lab
+  "Explain": "Erklären",
+  "Working…": "Arbeitet…",
+  "Could not explain that": "Das konnte nicht erklärt werden",
+  "Repaired spelling": "Reparierte Schreibweise",
+  "Compared as ä→ae": "Verglichen als ä→ae",
+  "Compared as ä→a": "Verglichen als ä→a",
+  "Series name read as": "Serienname gelesen als",
+  "Episode title read as": "Folgentitel gelesen als",
+  "Season": "Staffel",
+  "Episode": "Folge",
+  "Absolute number": "Absolute Nummer",
+  "Air date": "Sendedatum",
+  "Recognised by": "Erkannt durch",
+  "Movie name read as": "Filmname gelesen als",
+  "Movie year": "Filmjahr",
+  "Matching series": "Passende Serie",
+  "Matching movie": "Passender Film",
+
+  // relative time
+  "never": "nie",
+  "just now": "gerade eben",
+  "{}s ago": "vor {}s",
+  "{} min ago": "vor {} Min.",
+  "{} h ago": "vor {} Std.",
+  "{} days ago": "vor {} Tagen",
+  "any moment": "jeden Moment",
+  "in {}s": "in {}s",
+  "in {} min": "in {} Min.",
+  "moments": "Momente",
+  "minute": "Minute",
+  "minutes": "Minuten",
+  "hour": "Stunde",
+  "hours": "Stunden",
+  "day": "Tag",
+  "days": "Tage",
+  "file": "Datei",
+  "files": "Dateien",
+  "download": "Download",
+  "downloads": "Downloads",
+  "item": "Eintrag",
+  "items": "Einträge",
+  "error": "Fehler",
+  "errors": "Fehler",
+  "pass": "Durchlauf",
+  "passes": "Durchläufe",
+  "today": "heute",
+  "peak": "Spitze",
+  "Next check {}.": "Nächste Prüfung {}.",
+  "Nothing is unplaced.": "Nichts ist offen.",
+  "{} put in place over {}. ": "{} in {} zugeordnet. ",
+  "{} still unplaced.": "{} noch nicht zugeordnet.",
+  "{} · {} looked at · {}s": "{} · {} angesehen · {}s",
+  "· season {} · {} {}": "· Staffel {} · {} {}",
+  "Either nothing got stuck, or ohnaarr has not had a pass to make yet.":
+    "Entweder ist nichts hängengeblieben, oder ohnaarr hatte noch nichts zu tun.",
+  "Every file was either imported or left alone on purpose.":
+    "Jede Datei wurde importiert oder bewusst ausgelassen.",
+  "Press <strong>{}</strong> to see what ohnaarr would do with your queue. It writes nothing.":
+    "Drücke <strong>{}</strong>, um zu sehen, was ohnaarr mit deiner Warteschlange täte. "
+    + "Es schreibt dabei nichts.",
+
+  // paragraphs in the markup, flattened to one line
+  ["It reads the queue, works out what each stuck file is, and tells Sonarr to import it. "
+    + "Dry run is on to begin with, so the first pass only shows you its decisions. "
+    + "Radarr is added afterwards on the Connections page."]:
+    "Es liest die Warteschlange, erkennt jede hängende Datei und weist Sonarr an, sie zu "
+    + "importieren. Der Probelauf ist anfangs an, der erste Durchlauf zeigt also nur seine "
+    + "Entscheidungen. Radarr kommt später unter Verbindungen dazu.",
+  "As this container reaches it. Sonarr v4 and v5 both work; the API version is detected for you.":
+    "So, wie dieser Container sie erreicht. Sonarr v4 und v5 funktionieren beide; die "
+    + "API-Version wird für dich erkannt.",
+  "Files ohnaarr has put in place, and what it took to get them there.":
+    "Dateien, die ohnaarr zugeordnet hat, und was dafür nötig war.",
+  ["The strategy that identified each imported file. Grab history and Sonarr's own ids are "
+    + "exact; a fuzzy title is a guess that paid off."]:
+    "Die Strategie, die jede importierte Datei erkannt hat. Grab-Verlauf und Sonarrs eigene "
+    + "IDs sind exakt; ein unscharfer Titel ist eine Vermutung, die aufging.",
+  "Newest first. A pass marked dry decided but wrote nothing.":
+    "Neueste zuerst. Ein Durchlauf mit <span class=\"tag\">dry</span> hat entschieden, aber "
+    + "nichts geschrieben; seine Zahl steht mit Sternchen.",
+  ["Everything Sonarr and Radarr are holding. Marked rows are the ones ohnaarr acts on; the "
+    + "rest are downloading or importing by themselves."]:
+    "Alles, was Sonarr und Radarr zurückhalten. Markierte Zeilen bearbeitet ohnaarr; der "
+    + "Rest lädt herunter oder importiert von selbst.",
+  ["Where ohnaarr reaches your library. Sonarr handles series, Radarr handles movies, and "
+    + "either one works on its own."]:
+    "Wo ohnaarr deine Bibliothek erreicht. Sonarr kümmert sich um Serien, Radarr um Filme, "
+    + "und beide funktionieren auch allein.",
+  "Stored in settings.json. A value saved here wins over the environment variable.":
+    "Gespeichert in <code>/config/settings.json</code>. Ein hier gespeicherter Wert gewinnt "
+    + "gegen die Umgebungsvariable. Adressen und API-Schlüssel stehen unter "
+    + "<button class=\"link\" data-goto=\"connections\">Verbindungen</button>.",
+  ["For names matching cannot reach on its own: pin a release title to a series, or replace "
+    + "text before parsing. Read again on every run, so no restart needed."]:
+    "Für Namen, die die Zuordnung allein nicht schafft: einen Release-Titel fest einer Serie "
+    + "zuweisen oder Text vor dem Auslesen ersetzen. Wird bei jedem Durchlauf neu gelesen, "
+    + "also ohne Neustart.",
+  ["Paste a release or file name to see what ohnaarr makes of it: the repaired spelling, the "
+    + "forms it compares against your library, and what it would match."]:
+    "Füge einen Release- oder Dateinamen ein, um zu sehen, was ohnaarr daraus liest: die "
+    + "reparierte Schreibweise, die Vergleichsformen und den Treffer.",
+  "Everything imported so far, and anything still unplaced.":
+    "Alles bisher Importierte und alles, was noch offen ist.",
+  "Sign in to see the queue and change settings.":
+    "Melde dich an, um die Warteschlange zu sehen und Einstellungen zu ändern.",
+};
+
+/* The settings come from the server in English; these are the German labels,
+   kept by field key so a renamed label never silently falls back. */
+const DE_FIELDS = {
+  sonarr_url: ["Sonarr-URL", "Basis-URL, wie dieser Container sie erreicht"],
+  api_key: ["API-Schlüssel", "Sonarr → Einstellungen → Allgemein → API-Schlüssel"],
+  api_base: ["API-Basispfad", "/api/v5 für Sonarr v5, /api/v3 für Sonarr v4"],
+  verify_tls: ["TLS-Zertifikat prüfen", "Nur bei selbstsigniertem Zertifikat ausschalten"],
+  request_timeout: ["Zeitlimit je Anfrage (s)", ""],
+  dry_run: ["Probelauf", "Alles entscheiden und protokollieren, aber nichts importieren."],
+  interval_seconds: ["Prüfintervall (s)", "Pause zwischen den Durchläufen"],
+  import_mode: ["Importmodus", "Wie Sonarr die Dateien bewegen soll"],
+  ignored_rejections: ["Als Hinweis behandelte Ablehnungen",
+    "Einwände, die ein manueller Import überstimmen darf. Harte Ablehnungen nie."],
+  min_file_size_mb: ["Mindestgröße (MB)", "Kleinere Videos gelten als Sample"],
+  video_extensions: ["Videoendungen", "Komma-getrennt"],
+  extra_folder_scan: ["Zusätzliche Ordner", "Komma-getrennt, wie Sonarr sie sieht"],
+  hook_enabled: ["Push von Sonarr annehmen",
+    "Sonarr ruft ohnaarr sofort, wenn ein Import hängt, statt auf den Scan zu warten."],
+  hook_token: ["Push-Token", "Wird in der Push-URL verlangt"],
+  radarr_enabled: ["Radarr mitbehandeln", "Dieselbe Reparatur für hängende Filmimporte"],
+  radarr_url: ["Radarr-URL", "z. B. http://radarr:7878"],
+  radarr_api_key: ["Radarr-API-Schlüssel", "Radarr → Einstellungen → Allgemein"],
+  radarr_api_base: ["Radarr-API-Basispfad", "/api/v3"],
+  radarr_verify_tls: ["TLS-Zertifikat prüfen", ""],
+  movie_match_threshold: ["Schwelle für Filmtitel",
+    "Unscharfer Titelvergleich, 0–100. Bei zwei Treffern entscheidet das Jahr."],
+  movie_min_file_size_mb: ["Mindestgröße für Filme (MB)", "Hält Trailer und Extras fern"],
+  radarr_ignored_rejections: ["Als Hinweis behandelte Radarr-Ablehnungen", ""],
+  series_match_threshold: ["Schwelle für Serientitel", "Unscharfer Vergleich, 0–100"],
+  episode_title_threshold: ["Schwelle für Folgentitel", "Unscharfer Vergleich, 0–100"],
+  allow_numeric_episode_codes: ["Zahlencodes zulassen", "104 als S01E04 lesen"],
+  allow_absolute_numbering: ["Absolute Nummerierung zulassen", "Anime-Zählweise"],
+  assume_season_from_context: ["Staffel aus dem Zusammenhang",
+    "Serien mit nur einer Staffel brauchen keine Staffelangabe"],
+  max_attempts: ["Versuche je Datei", "Danach wird die Datei in Ruhe gelassen"],
+  attempt_backoff_seconds: ["Wartezeit zwischen Versuchen (s)", ""],
+  webhook_url: ["Webhook-URL", "Discord bekommt ein Embed, alles andere schlichtes JSON"],
+  notify_events: ["Benachrichtigen über", "Welche Durchläufe eine Nachricht erzeugen"],
+  notify_max_items: ["Dateien je Abschnitt", "Der Rest wird als „und N weitere“ gezählt"],
+  notify_username: ["Anzeigename des Webhooks", "nur Discord"],
+  notify_avatar_url: ["Avatar des Webhooks", "nur Discord; optional"],
+  log_level: ["Protokollstufe", "DEBUG zeigt jede Zuordnungsentscheidung"],
+  ui_language: ["Sprache der Oberfläche", "Englisch, Deutsch oder was der Browser verlangt"],
+  trusted_proxy_header: ["Vertrauter Anmelde-Header",
+    "Für Authelia/Authentik davor, z. B. Remote-User. Nur setzen, wenn ein Proxy den "
+    + "Header von außen entfernt."],
+  trusted_proxy_ips: ["Adressen, die ihn senden dürfen",
+    "Komma-getrennt. Leer heißt jede Adresse."],
+  web_username: ["Benutzername", "Benutzername und Passwort setzen heißt: Anmeldeformular"],
+  web_password: ["Passwort", "Ein neues Passwort meldet alle Browser ab"],
+  session_hours: ["Angemeldet bleiben (Stunden)", "Ein Neustart meldet immer alle ab"],
+  http_port: ["Port der Oberfläche", "Neustart nötig; 0 schaltet sie ab"],
+  state_path: ["Zustandsdatenbank", ""],
+  settings_path: ["Einstellungsdatei", ""],
+  overrides_path: ["Sonderregeln", ""],
+  run_once: ["Einmal laufen", "Ein Durchlauf, dann beenden"],
+};
+
+const GROUP_DE = {
+  connection: "Verbindung", radarr: "Radarr", behaviour: "Verhalten",
+  matching: "Zuordnung", safety: "Sicherheit", interface: "Oberfläche",
+  deployment: "Betrieb",
+};
+
+function t(text) {
+  if (LANG !== "de" || text === undefined || text === null) return text;
+  return DE[String(text)] ?? text;
+}
+/* Tagged template: `T`Next check ${when}.`` keeps the whole sentence as one key. */
+function T(strings, ...values) {
+  const key = strings.raw.join("{}");
+  const pattern = LANG === "de" ? (DE[key] ?? key) : key;
+  let index = 0;
+  return pattern.replace(/\{\}/g, () => String(values[index++] ?? ""));
+}
+function tField(field, part) {
+  if (LANG !== "de") return part === "label" ? field.label : field.help;
+  const entry = DE_FIELDS[field.key];
+  if (!entry) return part === "label" ? field.label : field.help;
+  return part === "label" ? entry[0] : (entry[1] || field.help);
+}
+function tGroup(group) {
+  return LANG === "de" ? (GROUP_DE[group.key] || group.label) : group.label;
+}
+
+/* The markup is written in English. The originals are captured once so the
+   switch works in both directions without reloading the page. */
+const STATIC_ATTRS = ["placeholder", "aria-label", "title"];
+let STATIC_SOURCE = null;
+
+const flat = (text) => text.replace(/\s+/g, " ").trim();
+
+function captureStatic(root = document.body) {
+  const texts = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    // A paragraph wrapped across source lines is one node with newlines in it,
+    // so the lookup key is the flattened text, not the literal value.
+    const raw = flat(node.nodeValue);
+    if (raw) texts.push([node, node.nodeValue, raw]);
+  }
+  const blocks = [];
+  for (const el of root.querySelectorAll("[data-i18n]"))
+    blocks.push([el, el.innerHTML, flat(el.dataset.i18n)]);
+  const attrs = [];
+  for (const el of root.querySelectorAll("*"))
+    for (const attr of STATIC_ATTRS) {
+      const value = el.getAttribute(attr);
+      if (value && value.trim()) attrs.push([el, attr, value]);
+    }
+  return { texts, blocks, attrs };
+}
+
+function applyStatic() {
+  if (!STATIC_SOURCE) STATIC_SOURCE = captureStatic();
+  for (const [node, original, raw] of STATIC_SOURCE.texts) {
+    const hit = LANG === "de" ? DE[raw] : null;
+    node.nodeValue = hit ? original.replace(original.trim(), hit) : original;
+  }
+  // Paragraphs that contain inline markup are swapped whole.
+  for (const [el, original, key] of STATIC_SOURCE.blocks) {
+    const hit = LANG === "de" ? DE[key] : null;
+    el.innerHTML = hit || original;
+  }
+  for (const [el, attr, original] of STATIC_SOURCE.attrs) {
+    const hit = LANG === "de" ? DE[original.trim()] : null;
+    el.setAttribute(attr, hit || original);
+  }
+  document.documentElement.lang = LANG;
+}
+
+function resolveLang(setting) {
+  let wanted = null;
+  try { wanted = localStorage.getItem("ohnaarr.lang"); } catch { /* private window */ }
+  if (!wanted) wanted = setting || "auto";
+  if (wanted === "auto") wanted = (navigator.language || "en").slice(0, 2).toLowerCase();
+  LANG = wanted === "de" ? "de" : "en";
+  return LANG;
+}
+
+/* The switch in the rail: instant, per browser, and it outlives a reload. */
+function setLang(lang) {
+  LANG = lang === "de" ? "de" : "en";
+  try { localStorage.setItem("ohnaarr.lang", LANG); } catch { /* private window */ }
+  applyStatic();
+  paintLangSwitch();
+  if (STATE) {
+    paintStatus();
+    paintConnections();
+    paintSettings();
+    paintRun();
+  }
+  if (STATS) paintStats();
+  const page = currentPage();
+  if (page === "queue") loadQueue();
+  if (page === "history") loadHistory();
+}
+
+function paintLangSwitch() {
+  const box = $("langSwitch");
+  if (!box) return;
+  for (const button of box.querySelectorAll("[data-lang]"))
+    button.setAttribute("aria-current", String(button.dataset.lang === LANG));
+}
+
+
 function markup(action) {
   return `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${
@@ -713,22 +1291,25 @@ async function api(path, body) {
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
+const plural = (n, one, many) => {
+  const word = n === 1 ? one : (many || one + "s");
+  return `${n} ${t(word)}`;
+};
 
 function since(ts) {
-  if (!ts) return "never";
+  if (!ts) return t("never");
   const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
-  if (s < 10) return "just now";
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  return `${Math.round(s / 86400)} days ago`;
+  if (s < 10) return t("just now");
+  if (s < 60) return T`${s}s ago`;
+  if (s < 3600) return T`${Math.round(s / 60)} min ago`;
+  if (s < 86400) return T`${Math.round(s / 3600)} h ago`;
+  return T`${Math.round(s / 86400)} days ago`;
 }
 function until(ts) {
   if (!ts) return null;
   const s = Math.round(ts - Date.now() / 1000);
-  if (s <= 0) return "any moment";
-  return s < 60 ? `in ${s}s` : `in ${Math.round(s / 60)} min`;
+  if (s <= 0) return t("any moment");
+  return s < 60 ? T`in ${s}s` : T`in ${Math.round(s / 60)} min`;
 }
 function clock(ts) {
   return ts
@@ -736,14 +1317,14 @@ function clock(ts) {
     : "—";
 }
 function spanOf(seconds) {
-  if (!seconds || seconds < 60) return "moments";
+  if (!seconds || seconds < 60) return t("moments");
   if (seconds < 3600) return plural(Math.round(seconds / 60), "minute");
   if (seconds < 172800) return plural(Math.round(seconds / 3600), "hour");
   return plural(Math.round(seconds / 86400), "day");
 }
 function flash(el, text, kind) {
   if (!el) return;
-  el.textContent = text;
+  el.textContent = t(text);
   el.className = "msg" + (kind ? " " + kind : "");
   if (text) setTimeout(() => { if (el.textContent === text) el.textContent = ""; }, 9000);
 }
@@ -755,7 +1336,7 @@ function toast(title, detail, kind = "info", ms = 6000) {
   const el = document.createElement("div");
   el.className = "toast " + kind;
   el.innerHTML = `${mark(TOAST_MARK[kind] || "planned")}<div class="txt">
-    <b>${esc(title)}</b>${detail ? `<span>${esc(detail)}</span>` : ""}</div>
+    <b>${esc(t(title))}</b>${detail ? `<span>${esc(t(detail))}</span>` : ""}</div>
     <button class="x" aria-label="Dismiss">&times;</button>`;
   const close = () => {
     if (!el.isConnected) return;
@@ -847,7 +1428,7 @@ async function load() {
   STATE = await api("/api/state");
   EDITS = {};
   dirty();
-  $("railVersion").textContent = "version " + STATE.version;
+  $("railVersion").textContent = T`version ${STATE.version}`;
   $("ovPath").textContent = STATE.overrides.path;
   $("ovText").value = STATE.overrides.text;
   paintStatus();
@@ -865,23 +1446,24 @@ function paintStatus() {
   if (!ready) {
     lamp.classList.add("warn");
     $("statusText").innerHTML =
-      "<strong>Not connected yet.</strong> Add your Sonarr address and API key to begin.";
+      `<strong>${t("Not connected yet.")}</strong> `
+      + t("Add your Sonarr address and API key to begin.");
     show("setup");
   } else {
     lamp.classList.add(s.healthy || s.radarr_healthy ? "ok" : "bad");
     const parts = [];
     if (s.configured) parts.push(s.healthy
-      ? `Watching <strong>Sonarr ${esc(s.sonarr_version || "")}</strong>`
-      : "<strong>Sonarr is not answering</strong>");
+      ? T`Watching <strong>Sonarr ${esc(s.sonarr_version || "")}</strong>`
+      : t("<strong>Sonarr is not answering</strong>"));
     if (s.radarr_enabled) parts.push(s.radarr_healthy
-      ? `and <strong>Radarr ${esc(s.radarr_version || "")}</strong>`
-      : "and <strong>Radarr is not answering</strong>");
+      ? T`and <strong>Radarr ${esc(s.radarr_version || "")}</strong>`
+      : t("and <strong>Radarr is not answering</strong>"));
     let text = parts.join(" ") + ".";
-    if (s.running) text += " Running now.";
+    if (s.running) text += t(" Running now.");
     else {
       const next = until(s.next_run_at);
-      text += next ? ` Next check ${next}.`
-        : ` Checking every ${Math.round((s.interval_seconds || 300) / 60)} min.`;
+      text += next ? T` Next check ${next}.`
+        : T` Checking every ${Math.round((s.interval_seconds || 300) / 60)} min.`;
     }
     $("statusText").innerHTML = text;
     if (currentPage() === "setup") show("dashboard");
@@ -892,11 +1474,14 @@ function paintStatus() {
 
   const out = [];
   if (ready && s.dry_run) out.push(`<div class="notice warn">${mark("unresolved")}<div>
-    <p><strong>Dry run is on.</strong> Every move is worked out and none are written.</p>
-    <p>Happy with the decisions? <button class="link" id="btnGoLive">Turn dry run off</button>
-      and ohnaarr will import from now on.</p></div></div>`);
+    <p><strong>${t("Dry run is on.")}</strong>
+       ${t("Every move is worked out and none are written.")}</p>
+    <p>${t("Happy with the decisions?")}
+      <button class="link" id="btnGoLive">${t("Turn dry run off")}</button>
+      ${t("and ohnaarr will import from now on.")}</p></div></div>`);
   if (s.last_error) out.push(`<div class="notice bad">${mark("error")}<div>
-    <p><strong>The last run hit a problem.</strong></p><p>${esc(s.last_error)}</p></div></div>`);
+    <p><strong>${t("The last run hit a problem.")}</strong></p>
+    <p>${esc(s.last_error)}</p></div></div>`);
   for (const text of s.problems || [])
     out.push(`<div class="notice warn">${mark("unresolved")}<div><p>${esc(text)}</p></div></div>`);
   $("notices").innerHTML = out.join("");
@@ -931,20 +1516,23 @@ function paintStats() {
   const peak = Math.max(1, ...days.map((d) => d.imported));
   const today = days.length ? days[days.length - 1].at : 0;
 
+  const span = esc(spanOf(Date.now() / 1000 - (c.first_import_at || Date.now() / 1000)));
+  const placed = `<strong>${plural(c.imports_total, "file")}</strong>`;
   $("dashLede").innerHTML = c.imports_total
-    ? `<strong>${plural(c.imports_total, "file")}</strong> put in place over
-       ${esc(spanOf(Date.now() / 1000 - (c.first_import_at || Date.now() / 1000)))}.
-       ${c.pending_total ? `${plural(c.pending_total, "file")} still unplaced.`
-                         : "Nothing is unplaced."}`
-    : "Nothing imported yet. Run a check and the repairs are charted here.";
+    ? T`${placed} put in place over ${span}. `
+      + (c.pending_total
+        ? T`${plural(c.pending_total, "file")} still unplaced.`
+        : t("Nothing is unplaced."))
+    : t("Nothing imported yet. Run a check and the repairs are charted here.");
 
   /* The chart is the hero: the work itself, day by day. */
   $("dashChart").innerHTML = total === 0
-    ? `<div class="empty"><b>No repairs in the last ${days.length} days</b>
-       Either nothing got stuck, or ohnaarr has not had a pass to make yet.</div>`
+    ? `<div class="empty"><b>${T`No repairs in the last ${days.length} days`}</b>
+       ${t("Either nothing got stuck, or ohnaarr has not had a pass to make yet.")}</div>`
     : `<div class="chart">
-        <header><h3>Repairs per day</h3>
-          <span class="scale">${plural(total, "file")} · ${days.length} days · peak ${peak}</span>
+        <header><h3>${t("Repairs per day")}</h3>
+          <span class="scale">${plural(total, "file")} · ${plural(days.length, "day")}
+            · ${t("peak")} ${peak}</span>
         </header>
         <div class="bars">${days.map((d) => {
           const height = d.imported ? Math.max(7, Math.round((d.imported / peak) * 100)) : 3;
@@ -958,7 +1546,7 @@ function paintStats() {
         }).join("")}</div>
         <div class="days">${days.map((d, i) => {
           const date = new Date(d.at * 1000);
-          const label = d.at === today ? "today"
+          const label = d.at === today ? t("today")
             : (i % 2 === 0 || days.length <= 8)
               ? date.toLocaleDateString([], { day: "numeric", month: "numeric" }) : "";
           return `<span class="${d.at === today ? "today" : ""}">${esc(label)}</span>`;
@@ -967,18 +1555,18 @@ function paintStats() {
 
   const tries = STATE && STATE.status ? STATE.status.max_attempts : null;
   const figs = [
-    { n: c.imports_24h, label: "repaired today", tone: c.imports_24h ? "good" : "zero" },
-    { n: c.imports_7d, label: "in the last 7 days", tone: c.imports_7d ? "" : "zero" },
-    { n: c.imports_total, label: "all time", tone: c.imports_total ? "" : "zero" },
-    { n: c.pending_total, label: "still unplaced", goto: "history",
+    { n: c.imports_24h, label: t("repaired today"), tone: c.imports_24h ? "good" : "zero" },
+    { n: c.imports_7d, label: t("in the last 7 days"), tone: c.imports_7d ? "" : "zero" },
+    { n: c.imports_total, label: t("all time"), tone: c.imports_total ? "" : "zero" },
+    { n: c.pending_total, label: t("still unplaced"), goto: "history",
       tone: c.pending_total ? "attn" : "zero" },
-    { n: c.gave_up_total, label: tries ? `gave up after ${tries} tries` : "gave up",
+    { n: c.gave_up_total, label: tries ? T`gave up after ${tries} tries` : t("gave up"),
       goto: "history", tone: c.gave_up_total ? "bad" : "zero" },
-    { n: c.runs_24h, label: "passes today", tone: c.runs_24h ? "" : "zero" },
-    { n: (c.avg_duration || 0).toFixed(1), unit: "s", label: "average pass" },
+    { n: c.runs_24h, label: t("passes today"), tone: c.runs_24h ? "" : "zero" },
+    { n: (c.avg_duration || 0).toFixed(1), unit: "s", label: t("average pass") },
     { word: STATS.session && STATS.session.startedAt
         ? spanOf(Date.now() / 1000 - STATS.session.startedAt) : "—",
-      label: "up for" },
+      label: t("up for") },
   ];
   $("dashFigs").innerHTML = figs.map((f) => {
     const value = f.word
@@ -998,12 +1586,13 @@ function paintStats() {
         <div class="track"><div class="fill" style="width:${
           Math.max(4, Math.round((v.count / viaPeak) * 100))}%"></div></div></div>`).join("")
       + `</div>`
-    : `<div class="msg">Nothing imported yet, so nothing to attribute.</div>`;
+    : `<div class="msg">${t("Nothing imported yet, so nothing to attribute.")}</div>`;
 
   const runs = STATS.runs || [];
   $("dashRuns").innerHTML = runs.length
-    ? `<table><thead><tr><th>When</th><th class="num">Seen</th><th class="num">Placed</th>
-        <th class="num">Needs you</th><th class="num">Failed</th><th class="num">Took</th>
+    ? `<table><thead><tr><th>${t("When")}</th><th class="num">${t("Seen")}</th>
+        <th class="num">${t("Placed")}</th><th class="num">${t("Needs you")}</th>
+        <th class="num">${t("Failed")}</th><th class="num">${t("Took")}</th>
         </tr></thead><tbody>`
       + runs.map((r) => {
           const placed = r.imported || (r.planned ? `${r.planned}*` : 0);
@@ -1017,7 +1606,7 @@ function paintStats() {
             <td class="num">${(r.duration || 0).toFixed(1)}s</td></tr>`;
         }).join("")
       + `</tbody></table>`
-    : `<div class="pad"><div class="msg">No pass has run yet.</div></div>`;
+    : `<div class="pad"><div class="msg">${t("No pass has run yet.")}</div></div>`;
 }
 
 /* ---------- decisions ---------- */
@@ -1025,8 +1614,8 @@ function targetOf(item) {
   if (!item.target) return "";
   if (item.season !== null && item.season !== undefined && (item.episodes || []).length) {
     const eps = item.episodes.map((n) => String(n).padStart(2, "0")).join(", ");
-    const word = item.episodes.length > 1 ? "episodes" : "episode";
-    return `${esc(item.target)} <em>· season ${item.season} · ${word} ${eps}</em>`;
+    const word = t(item.episodes.length > 1 ? "episodes" : "episode");
+    return `${esc(item.target)} <em>${T`· season ${item.season} · ${word} ${eps}`}</em>`;
   }
   return esc(item.target);
 }
@@ -1034,16 +1623,17 @@ function targetOf(item) {
 function paintRun() {
   const s = STATE.status, run = s.last_run;
   if (!run) {
-    $("runMeta").textContent = "No run yet.";
-    $("hero").innerHTML = `<div class="hero empty"><p>Press <strong>Preview changes</strong> to see
-      what ohnaarr would do with your queue. It writes nothing.</p></div>`;
+    $("runMeta").textContent = t("No run yet.");
+    $("hero").innerHTML = `<div class="hero empty"><p>${
+      T`Press <strong>${t("Preview changes")}</strong> to see what ohnaarr would do with your queue. It writes nothing.`
+    }</p></div>`;
     $("tally").innerHTML = "";
     $("groups").innerHTML = "";
     return;
   }
 
-  $("runMeta").textContent = `${since(s.last_run_at)} · ${plural(run.checked, "download")}`
-    + ` looked at · ${run.duration_seconds}s`;
+  $("runMeta").textContent =
+    T`${since(s.last_run_at)} · ${plural(run.checked, "download")} looked at · ${run.duration_seconds}s`;
 
   const items = run.items || [];
   const lead = items.find((i) => i.action === "imported")
@@ -1052,11 +1642,12 @@ function paintRun() {
     || items.find((i) => i.action === "error")
     || items[0];
   $("hero").innerHTML = lead ? hero(lead, items)
-    : `<div class="hero empty"><p>Nothing needed fixing. Sonarr is importing on its own.</p></div>`;
+    : `<div class="hero empty"><p>${
+      t("Nothing needed fixing. Sonarr is importing on its own.")}</p></div>`;
 
   $("tally").innerHTML = GROUPS.map(([key]) => {
     const n = run[key === "error" ? "errors" : key] ?? 0;
-    const label = key === "error" ? "failed" : key === "planned" ? "ready" : key;
+    const label = t(key === "error" ? "failed" : key === "planned" ? "ready" : key);
     return `<div class="v-${key}${n ? "" : " zero"}"><b>${n}</b><span>${label}</span></div>`;
   }).join("");
 
@@ -1064,52 +1655,125 @@ function paintRun() {
     const group = items.filter((i) => i.action === key);
     if (!group.length) return "";
     return `<div class="group">
-      <h3>${mark(key)}${esc(label)}<span class="n">${group.length}</span></h3>
+      <h3>${mark(key)}${esc(t(label))}<span class="n">${group.length}</span></h3>
       <div class="patch">${group.map((i) => patchRow(i, key)).join("")}</div></div>`;
-  }).join("") || `<div class="empty"><b>Quiet run</b>Nothing in the queue needed attention.</div>`;
+  }).join("") || `<div class="empty"><b>${t("Quiet run")}</b>${
+    t("Nothing in the queue needed attention.")}</div>`;
 }
 
 function hero(item, items) {
   const more = items.filter((i) => i.action === item.action).length - 1;
-  const dst = item.target ? targetOf(item) : `<em>${esc(item.reason || "not matched")}</em>`;
+  const dst = item.target
+    ? targetOf(item) : `<em>${esc(item.reason || t("not matched"))}</em>`;
   return `<div class="hero">
     <code class="src">${esc(item.file)}</code>
     <div class="arrow">${mark(item.action)}<span class="dst">${dst}</span></div>
-    ${item.via ? `<p class="prov">matched by ${esc(item.via)}</p>` : ""}
-    ${more > 0 ? `<p class="prov">${more} more like this in the same run</p>` : ""}</div>`;
+    ${item.via ? `<p class="prov">${T`matched by ${esc(item.via)}`}</p>` : ""}
+    ${more > 0 ? `<p class="prov">${T`${more} more like this in the same run`}</p>` : ""}</div>`;
 }
 
 function patchRow(item, action) {
   const head = item.target
     ? `<span class="tgt">${targetOf(item)}</span>`
       + (item.via ? ` <span class="via">${esc(item.via)}</span>` : "")
-    : `<span class="why">${esc(item.reason || "no match")}</span>`;
+    : `<span class="why">${esc(item.reason || t("no match"))}</span>`;
   const extra = item.target && item.reason
     ? `<div class="meta"><span class="why">${esc(item.reason)}</span></div>` : "";
+  /* Only a file nothing matched can be taught; the rest already have a target. */
+  const teach = action === "unresolved"
+    ? `<div class="acts"><button class="act quiet" data-teach="${esc(item.file)}"
+         data-path="${esc(item.path || "")}" data-kind="${esc(item.kind || "episode")}"
+         >${t("Teach it")}</button></div>` : "";
   return `<div class="row"><div class="gut">${mark(action)}</div><div class="body">
-    <div class="file">${esc(item.file)}</div><div class="meta">${head}</div>${extra}</div></div>`;
+    <div class="file">${esc(item.file)}</div><div class="meta">${head}</div>${extra}
+    ${teach}</div></div>`;
 }
+
+/* ---------- teaching a name ---------- */
+async function teachPanel(button) {
+  const host = button.closest(".body") || button.parentElement;
+  const open = host.querySelector(".teach");
+  if (open) { open.remove(); return; }
+
+  const name = button.dataset.teach;
+  const path = button.dataset.path || "";
+  const kind = button.dataset.kind === "movie" ? "movie" : "series";
+  const panel = document.createElement("div");
+  panel.className = "teach";
+  panel.innerHTML = `
+    <p>${T`Which ${t(kind === "movie" ? "movie" : "series")} is <b>${esc(name)}</b>? Picking one writes a rule, so this release name matches by itself from now on.`}</p>
+    <div class="find">
+      <input type="text" spellcheck="false" placeholder="${t("Search your library")}">
+      <button class="act quiet" type="button">${t("Search")}</button>
+    </div>
+    <div class="hits"></div>`;
+  host.append(panel);
+
+  const input = panel.querySelector("input");
+  const hits = panel.querySelector(".hits");
+  input.value = (name.split(/[.\s_-]+/).slice(0, 3).join(" ") || "").trim();
+  input.focus();
+
+  async function search() {
+    hits.innerHTML = `<div class="none"><span class="spin"></span> ${t("Looking…")}</div>`;
+    try {
+      const res = await api(`/api/lookup?kind=${kind}&term=${encodeURIComponent(input.value)}`);
+      hits.innerHTML = res.results.length
+        ? res.results.map((r) => `<button type="button" data-pick="${r.id}">
+            ${esc(r.title)}${r.year ? ` <span>${r.year}</span>` : ""}</button>`).join("")
+        : `<div class="none">${t("Nothing in your library matches that.")}</div>`;
+      for (const pick of hits.querySelectorAll("[data-pick]"))
+        pick.onclick = () => apply(Number(pick.dataset.pick), pick.textContent.trim());
+    } catch (err) {
+      if (!(err instanceof SignInNeeded))
+        hits.innerHTML = `<div class="none">${esc(err.message)}</div>`;
+    }
+  }
+
+  async function apply(targetId, label) {
+    hits.innerHTML = `<div class="none"><span class="spin"></span> ${
+      t("Saving the rule…")}</div>`;
+    try {
+      const res = await api("/api/teach", { name, targetId, kind, path });
+      panel.remove();
+      toast(t("Rule saved"),
+        T`"${res.alias}" now means ${res.target}. Trying the file again.`, "ok");
+      setTimeout(() => { load(); loadStats(); }, 1200);
+    } catch (err) {
+      if (!(err instanceof SignInNeeded))
+        hits.innerHTML = `<div class="none">${esc(err.message)}</div>`;
+    }
+  }
+
+  panel.querySelector("button.act").onclick = search;
+  input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") search(); });
+  search();
+}
+document.addEventListener("click", (ev) => {
+  const button = ev.target.closest("[data-teach]");
+  if (button) teachPanel(button);
+});
 
 /* ---------- runs ---------- */
 function runSummary(report, preview) {
   const bits = [];
-  if (report.imported) bits.push(`${plural(report.imported, "file")} imported`);
-  if (report.planned) bits.push(`${plural(report.planned, "file")} ready to import`);
-  if (report.unresolved) bits.push(`${plural(report.unresolved, "file")} need you`);
-  if (report.rejected) bits.push(`${plural(report.rejected, "file")} refused`);
+  if (report.imported) bits.push(T`${plural(report.imported, "file")} imported`);
+  if (report.planned) bits.push(T`${plural(report.planned, "file")} ready to import`);
+  if (report.unresolved) bits.push(T`${plural(report.unresolved, "file")} need you`);
+  if (report.rejected) bits.push(T`${plural(report.rejected, "file")} refused`);
   if (report.errors) bits.push(plural(report.errors, "error"));
   if (!bits.length) {
     return {
       title: report.checked ? "Nothing needed fixing" : "Nothing in the queue",
       detail: report.checked
-        ? `${plural(report.checked, "download")} looked at, all importing on their own.`
-        : "Sonarr and Radarr are holding nothing right now.",
+        ? T`${plural(report.checked, "download")} looked at, all importing on their own.`
+        : t("Sonarr and Radarr are holding nothing right now."),
       kind: "ok",
     };
   }
   return {
     title: preview ? "Preview ready" : report.imported ? "Imported" : "Pass finished",
-    detail: `${bits.join(" · ")}, in ${report.duration_seconds}s.`,
+    detail: T`${bits.join(" · ")}, in ${report.duration_seconds}s.`,
     kind: report.errors ? "bad" : (report.unresolved || report.rejected) ? "warn" : "ok",
   };
 }
@@ -1161,27 +1825,30 @@ function paintConnections() {
     const probe = TESTED[conn.id];
 
     let lamp = "", state = "";
-    if (!enabled) state = `Not handling ${conn.what}`;
-    else if (!configured) { lamp = "warn"; state = "Needs an address and key"; }
-    else if (healthy) { lamp = "ok"; state = version ? `Answering · ${version}` : "Answering"; }
-    else if (healthy === false) { lamp = "bad"; state = "Not answering"; }
-    else { lamp = "warn"; state = "Not checked yet"; }
+    const what = t(conn.what);
+    if (!enabled) state = T`Not handling ${what}`;
+    else if (!configured) { lamp = "warn"; state = t("Needs an address and key"); }
+    else if (healthy) {
+      lamp = "ok";
+      state = version ? T`Answering · ${version}` : t("Answering");
+    } else if (healthy === false) { lamp = "bad"; state = t("Not answering"); }
+    else { lamp = "warn"; state = t("Not checked yet"); }
 
     const head = `<header>
       <span class="lamp ${lamp}"></span>
       <div class="who"><h3>${conn.name}</h3>
-        <div class="where">${esc(url || `no address yet · handles ${conn.what}`)}</div></div>
+        <div class="where">${esc(url || T`no address yet · handles ${what}`)}</div></div>
       <div class="right">
         <span class="state ${lamp === "ok" ? "good" : lamp === "bad" ? "bad" : ""}">${
           esc(state)}</span>
         ${enabled
-          ? `<button class="act quiet" data-test="${conn.id}">Test connection</button>`
-          : `<button class="act" data-enable="1">Add Radarr</button>`}
+          ? `<button class="act quiet" data-test="${conn.id}">${t("Test connection")}</button>`
+          : `<button class="act" data-enable="1">${t("Add Radarr")}</button>`}
       </div></header>`;
 
     if (!enabled) {
       out.push(`<div class="conn" data-off>${head}<footer>
-        <span class="msg">Movies are left to Radarr itself until you add it here.</span>
+        <span class="msg">${t("Movies are left to Radarr itself until you add it here.")}</span>
         </footer></div>`);
       continue;
     }
@@ -1194,16 +1861,16 @@ function paintConnections() {
       .join("");
     const detail = probe
       ? `<span class="msg ${probe.ok ? "good" : "bad"}">${esc(probe.text)}</span>`
-      : `<span class="msg">${isSonarr
+      : `<span class="msg">${t(isSonarr
           ? "Series, seasons and episodes."
-          : "Movies, matched by title and year."}</span>`;
+          : "Movies, matched by title and year.")}</span>`;
     out.push(`<div class="conn">${head}${fields}<footer>${detail}
       ${isSonarr ? "" : `<button class="link quiet" data-disable="1"
-        style="margin-left:auto">Stop handling movies</button>`}</footer></div>`);
+        style="margin-left:auto">${t("Stop handling movies")}</button>`}</footer></div>`);
   }
 
-  out.push(`<p class="msg">ohnaarr only reads the queue and posts manual imports. It never
-    deletes a file, blocklists a release, or marks a download as failed.</p>`);
+  out.push(`<p class="msg">${t("ohnaarr only reads the queue and posts manual imports. "
+    + "It never deletes a file, blocklists a release, or marks a download as failed.")}</p>`);
   $("connOut").innerHTML = out.join("");
 
   for (const btn of $("connOut").querySelectorAll("[data-test]"))
@@ -1213,7 +1880,8 @@ function paintConnections() {
     EDITS.radarr_enabled = true;
     dirty();
     paintConnections();
-    toast("Radarr added", "Fill in the address and key, then save changes.", "info", 5000);
+    toast(t("Radarr added"), t("Fill in the address and key, then save changes."),
+      "info", 5000);
   };
   const off = $("connOut").querySelector("[data-disable]");
   if (off) off.onclick = () => { EDITS.radarr_enabled = false; dirty(); paintConnections(); };
@@ -1242,11 +1910,12 @@ function paintSettings() {
   for (const g of STATE.groups) {
     const fields = byGroup.get(g.key) || [];
     if (!fields.length) continue;
-    out.push(`<div class="fieldset"><header><h3>${esc(g.label)}</h3>`
-      + (GROUP_BLURB[g.key] ? `<p>${esc(GROUP_BLURB[g.key])}</p>` : "") + `</header>`);
+    out.push(`<div class="fieldset"><header><h3>${esc(tGroup(g))}</h3>`
+      + (GROUP_BLURB[g.key] ? `<p>${esc(t(GROUP_BLURB[g.key]))}</p>` : "") + `</header>`);
     out.push(fields.map(fieldRow).join(""));
+    if (g.key === "behaviour") out.push(pushFooter());
     if (g.key === "interface") out.push(`<footer>
-      <button class="act quiet" id="btnHook">Send a test message</button>
+      <button class="act quiet" id="btnHook">${t("Send a test message")}</button>
       <span class="msg" id="msg-hook"></span></footer>`);
     out.push(`</div>`);
   }
@@ -1254,7 +1923,35 @@ function paintSettings() {
 
   const hook = $("btnHook");
   if (hook) hook.onclick = testWebhook;
+  const copy = $("btnCopyHook");
+  if (copy) copy.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText($("hookUrl").textContent);
+      toast("Copied", "Paste it into the Sonarr webhook.", "ok", 3000);
+    } catch { toast("Could not copy", "Select the URL and copy it by hand.", "warn"); }
+  };
   wireForget("settingsOut");
+}
+
+function pushFooter() {
+  const on = EDITS.hook_enabled !== undefined
+    ? EDITS.hook_enabled
+    : (STATE.fields.find((f) => f.key === "hook_enabled") || {}).value;
+  if (!on) return "";
+  const token = EDITS.hook_token || "YOUR-TOKEN";
+  const url = `${location.origin}/api/hook?token=${encodeURIComponent(token)}`;
+  return `<footer style="display:block">
+    <p style="margin:0 0 8px;font-size:var(--t-sm);color:var(--dim)">
+      In Sonarr: <strong>Settings → Connect → + → Webhook</strong>. Tick
+      <strong>On Manual Interaction Required</strong>, method POST, and paste this URL.
+      Radarr is the same.</p>
+    <div class="row"><code class="mono" id="hookUrl"
+      style="flex:1;min-width:0;overflow-x:auto;white-space:nowrap;background:var(--slab-2);
+             border:1px solid var(--rule);border-radius:6px;padding:7px 10px;
+             font-size:var(--t-xs)">${esc(url)}</code>
+      <button class="act quiet" id="btnCopyHook" type="button">Copy</button></div>
+    <p class="msg" style="margin-top:8px">The scan keeps running as well, so a missed
+      push only costs you the usual wait.</p></footer>`;
 }
 
 function wireForget(containerId) {
@@ -1265,7 +1962,7 @@ function wireForget(containerId) {
       try {
         await api("/api/settings/forget", { key });
         await load();
-        toast("Back to the environment value", `${key} is no longer saved here.`, "ok");
+        toast(t("Back to the environment value"), T`${key} is no longer saved here.`, "ok");
       } catch (err) { problem(err.message); }
     };
 }
@@ -1277,7 +1974,7 @@ function fieldRow(f) {
   if (f.kind === "bool") {
     const value = edited !== undefined ? edited : f.value;
     control = `<label class="toggle"><input type="checkbox" data-key="${f.key}"
-      ${value ? "checked" : ""} ${off}><span>${value ? "On" : "Off"}</span></label>`;
+      ${value ? "checked" : ""} ${off}><span>${t(value ? "On" : "Off")}</span></label>`;
   } else if (f.kind === "choice") {
     const value = edited !== undefined ? edited : f.value;
     control = `<select data-key="${f.key}" ${off}>${f.choices.map((c) =>
@@ -1290,7 +1987,7 @@ function fieldRow(f) {
   } else if (f.kind === "secret") {
     control = `<input type="password" data-key="${f.key}" autocomplete="new-password"
       value="${esc(edited || "")}" ${off}
-      placeholder="${f.isSet ? "saved — type to replace" : "not set"}">`;
+      placeholder="${t(f.isSet ? "saved — type to replace" : "not set")}">`;
   } else if (f.kind === "int" || f.kind === "float") {
     control = `<input type="number" data-key="${f.key}"
       value="${esc(edited !== undefined ? edited : f.value)}"
@@ -1302,12 +1999,13 @@ function fieldRow(f) {
       value="${esc(edited !== undefined ? edited : stored)}" spellcheck="false" ${off}>`;
   }
   const prov = f.source === "saved"
-    ? `<span class="saved">saved here</span>
-       <button class="link" data-forget="${f.key}">use ${esc(f.env)} instead</button>`
-    : f.source === "env" ? `<span>set by <code>${esc(f.env)}</code></span>`
+    ? `<span class="saved">${t("saved here")}</span>
+       <button class="link" data-forget="${f.key}">${T`use ${esc(f.env)} instead`}</button>`
+    : f.source === "env" ? `<span>${t("set by")} <code>${esc(f.env)}</code></span>`
     : `<code>${esc(f.env)}</code>`;
-  return `<div class="field"><div><label>${esc(f.label)}</label>`
-    + (f.help ? `<div class="help">${esc(f.help)}</div>` : "")
+  const help = tField(f, "help");
+  return `<div class="field"><div><label>${esc(tField(f, "label"))}</label>`
+    + (help ? `<div class="help">${esc(help)}</div>` : "")
     + `<div class="prov">${prov}</div></div><div>${control}</div></div>`;
 }
 
@@ -1318,11 +2016,16 @@ function onEdit(ev) {
     if (el.type === "checkbox") {
       EDITS[el.dataset.key] = el.checked;
       const label = el.parentElement.querySelector("span");
-      if (label) label.textContent = el.checked ? "On" : "Off";
+      if (label) label.textContent = t(el.checked ? "On" : "Off");
     } else if (field && field.kind === "secret") {
       if (el.value) EDITS[el.dataset.key] = el.value; else delete EDITS[el.dataset.key];
     } else {
       EDITS[el.dataset.key] = el.value;
+    }
+    if (el.dataset.key === "hook_enabled" || el.dataset.key === "hook_token") {
+      dirty();
+      paintSettings();
+      return;
     }
   } else if (el.dataset.multi) {
     const key = el.dataset.multi;
@@ -1337,7 +2040,7 @@ form.addEventListener("change", onEdit);
 function dirty() {
   const n = Object.keys(EDITS).length;
   $("savebar").classList.toggle("up", n > 0);
-  $("saveCount").textContent = n === 1 ? "1 unsaved change" : `${n} unsaved changes`;
+  $("saveCount").textContent = n === 1 ? t("1 unsaved change") : T`${n} unsaved changes`;
 }
 $("btnSave").onclick = async () => {
   const keys = Object.keys(EDITS);
@@ -1348,9 +2051,9 @@ $("btnSave").onclick = async () => {
     await api("/api/settings", { values: EDITS });
     await load();
     if (signsOut) await refreshSession();
-    toast("Settings saved", signsOut
-      ? "Other browsers were signed out; this one stays in."
-      : `${plural(keys.length, "setting")} updated. They apply on the next pass.`, "ok");
+    toast(t("Settings saved"), signsOut
+      ? t("Other browsers were signed out; this one stays in.")
+      : T`${plural(keys.length, "setting")} updated. They apply on the next pass.`, "ok");
   } catch (err) { problem(err.message); }
   finally { $("btnSave").disabled = false; }
 };
@@ -1368,7 +2071,7 @@ async function testConnection(target) {
     const res = await api("/api/test", { values: { ...EDITS, target } });
     if (!res.ok) {
       TESTED[target] = { ok: false, text: res.error };
-      toast(`${name} did not answer`, res.error, "bad", 13000);
+      toast(T`${name} did not answer`, res.error, "bad", 13000);
     } else {
       const found = target === "radarr"
         ? `Radarr ${res.version} · ${plural(res.movieCount, "movie")}`
@@ -1377,13 +2080,13 @@ async function testConnection(target) {
         ok: true,
         text: found + (res.apiBaseChanged ? ` · using ${res.apiBaseChanged}` : ""),
       };
-      toast(`${name} answered`, TESTED[target].text, "ok");
+      toast(T`${name} answered`, TESTED[target].text, "ok");
     }
     if (res.apiBaseChanged) await load();
   } catch (err) {
     if (!(err instanceof SignInNeeded)) {
       TESTED[target] = { ok: false, text: err.message };
-      toast(`${name} did not answer`, err.message, "bad", 13000);
+      toast(T`${name} did not answer`, err.message, "bad", 13000);
     }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = label; }
@@ -1398,7 +2101,7 @@ async function testWebhook() {
   try {
     if (Object.keys(EDITS).length) { await api("/api/settings", { values: EDITS }); await load(); }
     const res = await api("/api/notify/test", {});
-    if (res.ok) toast("Test message sent", `It went to your ${res.target} webhook.`, "ok");
+    if (res.ok) toast(t("Test message sent"), T`It went to your ${res.target} webhook.`, "ok");
     else toast("The message did not go through", res.error || "", "bad", 13000);
   } catch (err) {
     if (!(err instanceof SignInNeeded))
@@ -1447,36 +2150,71 @@ async function loadQueue() {
   try {
     const q = await api("/api/queue");
     $("queueMsg").textContent = q.stuck
-      ? `${q.stuck} of ${q.total} need attention`
-      : `${plural(q.total, "item")}, none stuck`;
+      ? T`${q.stuck} of ${q.total} need attention`
+      : T`${plural(q.total, "item")}, none stuck`;
     const badge = $("navQueue");
     badge.hidden = !q.stuck;
     badge.textContent = q.stuck;
 
     if (!q.items.length) {
       $("queueOut").innerHTML =
-        `<div class="empty"><b>The queue is empty</b>Nothing is downloading or waiting to import.</div>`;
+        `<div class="empty"><b>${t("The queue is empty")}</b>${
+          t("Nothing is downloading or waiting to import.")}</div>`;
       return;
     }
     q.items.sort((a, b) => Number(b.stuck) - Number(a.stuck));
     $("queueOut").innerHTML = `<table><thead><tr>
-      <th>Release</th><th>Goes to</th><th>State</th></tr></thead><tbody>`
+      <th>${t("Release")}</th><th>${t("Goes to")}</th>
+      <th>${t("State")}</th></tr></thead><tbody>`
       + q.items.map((it) => `<tr class="${it.stuck ? "stuck" : ""}">
         <td><div class="mono">${esc(it.title)}</div>`
         + (it.matchedById
-          ? `<div style="margin-top:5px"><span class="tag live">matched by ID</span></div>` : "")
+          ? `<div style="margin-top:5px"><span class="tag live">${
+              t("matched by ID")}</span></div>` : "")
         + (it.messages || []).map((m) =>
           `<div class="msg" style="margin-top:4px">${esc(m)}</div>`).join("")
+        + (it.stuck
+          ? `<div class="acts" style="margin-top:8px"><button class="act quiet"
+               data-fix="${esc(it.id)}" data-fixkind="${esc(it.kind)}">${
+                 t("Fix now")}</button></div>`
+          : "")
         + `</td><td>${esc(it.target || "—")}<div class="msg">${esc(it.kind)}</div></td>
         <td>${esc(it.state)}<div class="msg">${esc(it.status)}</div></td></tr>`).join("")
       + `</tbody></table>`;
+
+    for (const button of $("queueOut").querySelectorAll("[data-fix]"))
+      button.onclick = () => fixOne(button);
   } catch (err) {
     if (err instanceof SignInNeeded) return;
-    $("queueOut").innerHTML = `<div class="empty"><b>Could not read the queue</b>${esc(err.message)}</div>`;
+    $("queueOut").innerHTML = `<div class="empty"><b>${
+      t("Could not read the queue")}</b>${esc(err.message)}</div>`;
     $("queueMsg").textContent = "";
   }
 }
 $("btnQueue").onclick = loadQueue;
+
+async function fixOne(button) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.innerHTML = `<span class="spin"></span> Working…`;
+  try {
+    const res = await api("/api/fix", {
+      id: Number(button.dataset.fix),
+      kind: button.dataset.fixkind === "movie" ? "movie" : "series",
+    });
+    const sum = runSummary(res.report, false);
+    toast(sum.title, sum.detail, sum.kind);
+    STATE.status.last_run = res.report;
+    STATE.status.last_run_at = Date.now() / 1000;
+    paintRun();
+    loadQueue();
+    loadStats();
+  } catch (err) {
+    if (!(err instanceof SignInNeeded)) problem(err.message);
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
 
 /* ---------- overrides ---------- */
 $("btnOvSave").onclick = async () => {
@@ -1485,8 +2223,8 @@ $("btnOvSave").onclick = async () => {
   try {
     const res = await api("/api/overrides", { text: $("ovText").value });
     const n = Object.keys(res.aliases || {}).length;
-    toast("Rules saved",
-      `${n ? plural(n, "alias") : "No aliases"} in effect from the next pass.`, "ok");
+    toast(t("Rules saved"),
+      T`${n ? plural(n, "alias") : t("No aliases")} in effect from the next pass.`, "ok");
   } catch (err) {
     if (!(err instanceof SignInNeeded))
       toast("The rules were not saved", err.message, "bad", 13000);
@@ -1500,14 +2238,15 @@ $("btnOvExample").onclick = () => {
 title_replacements:
   # - ["Staffel", "Season"]
 `;
-  toast("Example inserted", "Edit it, then save the rules.", "info", 4000);
+  toast(t("Example inserted"), t("Edit it, then save the rules."), "info", 4000);
 };
 
 /* ---------- name lab ---------- */
 $("btnLab").onclick = async () => {
   const name = $("labIn").value.trim();
   if (!name) return;
-  $("labOut").innerHTML = `<div class="empty"><span class="spin"></span> Working…</div>`;
+  $("labOut").innerHTML = `<div class="empty"><span class="spin"></span> ${
+    t("Working…")}</div>`;
   try {
     const r = await api("/api/explain", { name });
     const episodes = (r.episodes || []).length ? r.episodes.join(", ") : null;
@@ -1533,12 +2272,13 @@ $("btnLab").onclick = async () => {
     ];
     $("labOut").innerHTML = `<div class="readout">` + lines.map(([k, v, hit]) => {
       const empty = v === null || v === undefined || v === "";
-      return `<div class="line"><div class="k">${esc(k)}</div>
+      return `<div class="line"><div class="k">${esc(t(k))}</div>
         <div class="v ${empty ? "none" : hit ? "hit" : ""}">${empty ? "—" : esc(v)}</div></div>`;
     }).join("") + `</div>`;
   } catch (err) {
     if (err instanceof SignInNeeded) return;
-    $("labOut").innerHTML = `<div class="empty"><b>Could not explain that</b>${esc(err.message)}</div>`;
+    $("labOut").innerHTML = `<div class="empty"><b>${
+      t("Could not explain that")}</b>${esc(err.message)}</div>`;
   }
 };
 $("labIn").addEventListener("keydown", (ev) => { if (ev.key === "Enter") $("btnLab").click(); });
@@ -1553,6 +2293,7 @@ async function loadHistory() {
     const h = await api("/api/history?limit=100");
     $("histOkN").textContent = h.imports.length || "";
     $("histBadN").textContent = h.failures.length || "";
+    $("btnRetryAll").hidden = h.failures.length < 2;
 
     $("histOk").innerHTML = h.imports.length
       ? `<div class="patch">` + h.imports.map((r) => `<div class="row">
@@ -1560,27 +2301,30 @@ async function loadHistory() {
             <div class="file">${esc(basename(r.path))}</div>
             <div class="meta"><span class="via">${esc(r.via)}</span> · ${since(r.at)}</div>
           </div></div>`).join("") + `</div>`
-      : `<div class="empty"><b>Nothing yet</b>Imports are listed here as they happen.</div>`;
+      : `<div class="empty"><b>${t("Nothing yet")}</b>${
+        t("Imports are listed here as they happen.")}</div>`;
 
     $("histBad").innerHTML = h.failures.length
       ? `<div class="patch">` + h.failures.map((r) => `<div class="row">
           <div class="gut">${mark("unresolved")}</div><div class="body">
             <div class="file">${esc(basename(r.path))}</div>
-            <div class="meta"><span class="why">${esc(r.error || "not matched")}</span>
-              · tried ${r.attempts}× · ${since(r.at)}</div>
+            <div class="meta"><span class="why">${esc(r.error || t("not matched"))}</span>
+              · ${T`tried ${r.attempts}× · ${since(r.at)}`}</div>
             <div class="acts">
-              <button class="act quiet" data-retry="${esc(r.path)}">Try again</button></div>
+              <button class="act quiet" data-retry="${esc(r.path)}">${t("Try again")}</button>
+              <button class="act quiet" data-teach="${esc(basename(r.path))}"
+                data-path="${esc(r.path)}" data-kind="episode">${t("Teach it")}</button></div>
           </div></div>`).join("") + `</div>`
-      : `<div class="empty"><b>Nothing unplaced</b>Every file was either imported or left alone
-         on purpose.</div>`;
+      : `<div class="empty"><b>${t("Nothing unplaced")}</b>${
+        t("Every file was either imported or left alone on purpose.")}</div>`;
 
     for (const btn of $("histBad").querySelectorAll("[data-retry]"))
       btn.onclick = async () => {
         btn.disabled = true;
         try {
           await api("/api/forget", { path: btn.dataset.retry });
-          toast("Queued for another try",
-            `${basename(btn.dataset.retry)} is tried again on the next pass.`, "ok");
+          toast(t("Queued for another try"),
+            T`${basename(btn.dataset.retry)} is tried again on the next pass.`, "ok");
           loadHistory();
         } catch (err) {
           btn.disabled = false;
@@ -1590,9 +2334,22 @@ async function loadHistory() {
   } catch (err) {
     if (err instanceof SignInNeeded) return;
     $("histBad").innerHTML =
-      `<div class="empty"><b>Could not read the history</b>${esc(err.message)}</div>`;
+      `<div class="empty"><b>${t("Could not read the history")}</b>${esc(err.message)}</div>`;
   }
 }
+
+$("btnRetryAll").onclick = async () => {
+  const button = $("btnRetryAll");
+  button.disabled = true;
+  try {
+    const res = await api("/api/retry", {});
+    toast(t("Queued for another try"),
+      T`${plural(res.removed, "file")} will be tried again on the next pass.`, "ok");
+    loadHistory();
+  } catch (err) {
+    if (!(err instanceof SignInNeeded)) problem(err.message);
+  } finally { button.disabled = false; }
+};
 
 /* ---------- boot ---------- */
 function startPolling() {
@@ -1620,6 +2377,9 @@ async function refreshSession() {
 
 async function boot() {
   await refreshSession();
+  resolveLang(SESSION.language);
+  applyStatic();
+  paintLangSwitch();
   if (SESSION.authRequired && !SESSION.signedIn) { openGate(""); return; }
   closeGate();
   await load();
@@ -1627,10 +2387,16 @@ async function boot() {
   startPolling();
 }
 
+$("langSwitch").addEventListener("click", (ev) => {
+  const button = ev.target.closest("[data-lang]");
+  if (button) setLang(button.dataset.lang);
+});
+
 boot().catch((err) => {
   if (err instanceof SignInNeeded) return;
   $("notices").innerHTML = `<div class="notice bad">${mark("error")}<div>
-    <p><strong>Cannot reach the ohnaarr service.</strong></p><p>${esc(err.message)}</p></div></div>`;
+    <p><strong>${t("Cannot reach the ohnaarr service.")}</strong></p>
+    <p>${esc(err.message)}</p></div></div>`;
 });
 </script>
 </body>
