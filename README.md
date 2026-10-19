@@ -119,7 +119,7 @@ docker compose up -d
 ```
 
 Images: [`patryck507/ohnaarr`](https://hub.docker.com/r/patryck507/ohnaarr) —
-`latest` and `1.3.0`, `linux/amd64`, about 50 MB compressed. To build it
+`latest` and `1.3.1`, `linux/amd64`, about 50 MB compressed. To build it
 yourself instead:
 
 ```bash

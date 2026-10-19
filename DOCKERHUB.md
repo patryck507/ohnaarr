@@ -51,7 +51,7 @@ point the URLs at the host.
 | tag | contents |
 | --- | --- |
 | `latest` | the newest release |
-| `1.3.0` | pinned release |
+| `1.3.1` | pinned release |
 
 `linux/amd64`. Runs as uid 1000, has a `HEALTHCHECK`, and keeps its state in the
 `/config` volume.

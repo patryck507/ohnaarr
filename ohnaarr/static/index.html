@@ -957,6 +957,24 @@ const DE = {
   "Copy": "Kopieren",
   "Copied": "Kopiert",
   "Paste it into the Sonarr webhook.": "Füge sie in den Sonarr-Webhook ein.",
+  "In Sonarr:": "In Sonarr:",
+  "Settings → Connect → + → Webhook": "Einstellungen → Verbinden → + → Webhook",
+  "Tick": "Hake",
+  "method POST, and paste this URL. Radarr is the same.":
+    "an, Methode POST, und füge diese URL ein. Radarr genauso.",
+  "Save the changes first, then paste this URL.":
+    "Erst speichern, dann diese URL einfügen.",
+  ["A saved token is never shown again. Put yours in place of the placeholder, "
+    + "or type a new token above and save."]:
+    "Ein gespeichertes Token wird nie wieder angezeigt. Setze deins an die Stelle des "
+    + "Platzhalters, oder tippe oben ein neues und speichere.",
+  ["No token is set, so anyone who can reach this port can start a run. "
+    + "That is fine on a private network; set a token above otherwise."]:
+    "Kein Token gesetzt: Wer den Port erreicht, kann einen Durchlauf starten. Im privaten "
+    + "Netz ist das in Ordnung, sonst setze oben ein Token.",
+  ["The scan keeps running as well, so a missed "
+    + "push only costs you the usual wait."]:
+    "Der Scan läuft weiter, ein verpasster Push kostet also nur die übliche Wartezeit.",
   "Could not copy": "Kopieren nicht möglich",
   "Select the URL and copy it by hand.": "Markiere die URL und kopiere sie von Hand.",
   "setting": "Einstellung",
@@ -1923,35 +1941,76 @@ function paintSettings() {
 
   const hook = $("btnHook");
   if (hook) hook.onclick = testWebhook;
-  const copy = $("btnCopyHook");
-  if (copy) copy.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText($("hookUrl").textContent);
-      toast("Copied", "Paste it into the Sonarr webhook.", "ok", 3000);
-    } catch { toast("Could not copy", "Select the URL and copy it by hand.", "warn"); }
-  };
+  wirePushCopy();
   wireForget("settingsOut");
 }
 
 function pushFooter() {
-  const on = EDITS.hook_enabled !== undefined
-    ? EDITS.hook_enabled
-    : (STATE.fields.find((f) => f.key === "hook_enabled") || {}).value;
+  const field = (key) => STATE.fields.find((f) => f.key === key) || {};
+  const on = EDITS.hook_enabled !== undefined ? EDITS.hook_enabled : field("hook_enabled").value;
   if (!on) return "";
-  const token = EDITS.hook_token || "YOUR-TOKEN";
-  const url = `${location.origin}/api/hook?token=${encodeURIComponent(token)}`;
+
+  /* Three states, three different URLs. A saved token is never sent back to the
+     browser, so the only honest thing to show then is a placeholder - and the
+     URL must carry no token at all when none is set, or every push gets a 401. */
+  const typed = EDITS.hook_token || "";
+  const saved = !!field("hook_token").isSet;
+  const complete = Boolean(typed) || !saved;
+  const url = typed
+    ? `${location.origin}/api/hook?token=${encodeURIComponent(typed)}`
+    : saved
+      ? `${location.origin}/api/hook?token=<the token you set>`
+      : `${location.origin}/api/hook`;
+
+  const note = typed
+    ? t("Save the changes first, then paste this URL.")
+    : saved
+      ? t("A saved token is never shown again. Put yours in place of the placeholder, "
+          + "or type a new token above and save.")
+      : t("No token is set, so anyone who can reach this port can start a run. "
+          + "That is fine on a private network; set a token above otherwise.");
+
   return `<footer style="display:block">
     <p style="margin:0 0 8px;font-size:var(--t-sm);color:var(--dim)">
-      In Sonarr: <strong>Settings → Connect → + → Webhook</strong>. Tick
-      <strong>On Manual Interaction Required</strong>, method POST, and paste this URL.
-      Radarr is the same.</p>
+      ${t("In Sonarr:")} <strong>${t("Settings → Connect → + → Webhook")}</strong>.
+      ${t("Tick")} <strong>${t("On Manual Interaction Required")}</strong>,
+      ${t("method POST, and paste this URL. Radarr is the same.")}</p>
     <div class="row"><code class="mono" id="hookUrl"
       style="flex:1;min-width:0;overflow-x:auto;white-space:nowrap;background:var(--slab-2);
              border:1px solid var(--rule);border-radius:6px;padding:7px 10px;
              font-size:var(--t-xs)">${esc(url)}</code>
-      <button class="act quiet" id="btnCopyHook" type="button">Copy</button></div>
-    <p class="msg" style="margin-top:8px">The scan keeps running as well, so a missed
-      push only costs you the usual wait.</p></footer>`;
+      <button class="act quiet" id="btnCopyHook" type="button"
+        ${complete ? "" : "disabled"}>${t("Copy")}</button></div>
+    <p class="msg" style="margin-top:8px">${esc(note)}</p>
+    <p class="msg" style="margin-top:4px">${t("The scan keeps running as well, so a missed "
+      + "push only costs you the usual wait.")}</p></footer>`;
+}
+
+function wirePushCopy() {
+  const copy = $("btnCopyHook");
+  if (!copy) return;
+  copy.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText($("hookUrl").textContent);
+      toast(t("Copied"), t("Paste it into the Sonarr webhook."), "ok", 3000);
+    } catch {
+      toast(t("Could not copy"), t("Select the URL and copy it by hand."), "warn");
+    }
+  };
+}
+
+/* Replacing the whole settings pane while someone is typing the token would
+   take the focus with it, so only the footer is redrawn. */
+function refreshPushFooter() {
+  const current = $("hookUrl");
+  const footer = current ? current.closest("footer") : null;
+  const markup = pushFooter();
+  if (!footer || !markup) {
+    paintSettings();
+    return;
+  }
+  footer.outerHTML = markup;
+  wirePushCopy();
 }
 
 function wireForget(containerId) {
@@ -2022,9 +2081,14 @@ function onEdit(ev) {
     } else {
       EDITS[el.dataset.key] = el.value;
     }
-    if (el.dataset.key === "hook_enabled" || el.dataset.key === "hook_token") {
+    if (el.dataset.key === "hook_enabled") {
       dirty();
-      paintSettings();
+      paintSettings();            // the whole block appears or disappears
+      return;
+    }
+    if (el.dataset.key === "hook_token") {
+      dirty();
+      refreshPushFooter();        // only the URL changes; keep the cursor put
       return;
     }
   } else if (el.dataset.multi) {
